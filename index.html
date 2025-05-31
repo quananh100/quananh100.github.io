@@ -83,6 +83,13 @@
       display: none;
       padding: 20px;
       box-sizing: border-box;
+      flex-direction: column;
+    }
+    #bannedMessage small {
+      font-size: 18px;
+      margin-top: 20px;
+      opacity: 0.8;
+      font-weight: normal;
     }
   </style>
 </head>
@@ -100,7 +107,10 @@
     SPEED: 1x
   </div>
 
-  <div id="bannedMessage">You have been banned for 1:00</div>
+  <div id="bannedMessage">
+    You have been banned for <span id="banTimer">1:00</span>
+    <small>Please wait or refresh page.</small>
+  </div>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
@@ -140,16 +150,26 @@
     let isBanned = false;
     let bannedExpireTime = 0;
 
-    let birchImage = new Image();
-    birchImage.src = "birch.png";
-    birchImage.onerror = () => { birchImage = null; };
-
     const scoreDiv = document.getElementById("score");
     const cmdInput = document.getElementById("cmdInput");
     const cmdResult = document.getElementById("cmdResult");
     const statusDiv = document.getElementById("status");
     const bannedMessage = document.getElementById("bannedMessage");
+    const banTimerSpan = document.getElementById("banTimer");
     const metaViewport = document.querySelector('meta[name=viewport]');
+
+    // Load ban info from localStorage if present
+    if (localStorage.getItem('bannedExpireTime')) {
+      const expire = parseInt(localStorage.getItem('bannedExpireTime'), 10);
+      if (!isNaN(expire) && expire > Date.now()) {
+        isBanned = true;
+        bannedExpireTime = expire;
+        isPaused = true;
+        showBannedMessage();
+      } else {
+        localStorage.removeItem('bannedExpireTime');
+      }
+    }
 
     function updateStatus() {
       statusDiv.innerHTML =
@@ -165,6 +185,7 @@
       gameOver = false;
       scoreDiv.textContent = "0";
       frames = 0;
+      // Keep banned state on reset
       checkBanStatus();
     }
 
@@ -179,12 +200,8 @@
     }
 
     function drawBirch() {
-      if (birchImage && birchImage.complete) {
-        ctx.drawImage(birchImage, birch.x, birch.y, birch.width, birch.height);
-      } else {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(birch.x, birch.y, birch.width, birch.height);
-      }
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(birch.x, birch.y, birch.width, birch.height);
     }
 
     function drawPipes() {
@@ -268,6 +285,7 @@
         if (now >= bannedExpireTime) {
           isBanned = false;
           hideBannedMessage();
+          localStorage.removeItem('bannedExpireTime');
           isPaused = false;
         } else {
           showBannedMessage();
@@ -276,6 +294,7 @@
       } else {
         hideBannedMessage();
         isPaused = false;
+        localStorage.removeItem('bannedExpireTime');
       }
     }
 
@@ -286,12 +305,13 @@
       if (diff < 0) {
         isBanned = false;
         hideBannedMessage();
+        localStorage.removeItem('bannedExpireTime');
         isPaused = false;
         return;
       }
       const minutes = Math.floor(diff / 60);
       const seconds = diff % 60;
-      bannedMessage.textContent = `You have been banned for ${minutes}:${seconds.toString().padStart(2,'0')}`;
+      banTimerSpan.textContent = `${minutes}:${seconds.toString().padStart(2,'0')}`;
     }
 
     canvas.addEventListener("mousedown", () => {
@@ -333,6 +353,7 @@
       } else if (cmd === "/banned") {
         isBanned = true;
         bannedExpireTime = Date.now() + 60000;
+        localStorage.setItem('bannedExpireTime', bannedExpireTime.toString());
         cmdResult.textContent = "";
         accepted = true;
         checkBanStatus();
