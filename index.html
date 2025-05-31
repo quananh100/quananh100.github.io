@@ -40,6 +40,7 @@
       padding: 8px;
       font-size: 14px;
       border-radius: 5px;
+      z-index: 20;
     }
 
     #console input {
@@ -47,7 +48,7 @@
       border: none;
       color: white;
       outline: none;
-      width: 160px;
+      width: 180px;
     }
 
     #console .result {
@@ -112,19 +113,18 @@
 
     let isImmortal = false;
     let isGhost = false;
+    let speedMultiplier = 1;
+    let isPaused = false;
 
     let birchImage = new Image();
-    birchImage.src = "birch.png"; // đặt cạnh file HTML
-
-    birchImage.onerror = () => {
-      // fallback nếu ảnh không tải được
-      birchImage = null;
-    };
+    birchImage.src = "birch.png"; // Optional: add a skin
+    birchImage.onerror = () => { birchImage = null; };
 
     function updateStatus() {
       document.getElementById("status").innerHTML =
-        (isImmortal ? "IMMORTAL: ON" : "IMMORTAL: OFF") + "<br>" +
-        (isGhost ? "GHOST: ON" : "GHOST: OFF");
+        `IMMORTAL: ${isImmortal ? 'ON' : 'OFF'}<br>` +
+        `GHOST: ${isGhost ? 'ON' : 'OFF'}<br>` +
+        `SPEED: ${speedMultiplier}x`;
     }
 
     function resetGame() {
@@ -165,16 +165,16 @@
     }
 
     function update() {
-      if (gameOver) return;
+      if (gameOver || isPaused) return;
 
       birch.velocity += GRAVITY;
       birch.y += birch.velocity;
 
-      if (frames % 90 === 0) {
+      if (frames % Math.floor(90 / speedMultiplier) === 0) {
         spawnPipe();
       }
 
-      pipes.forEach(pipe => pipe.x -= 2);
+      pipes.forEach(pipe => pipe.x -= 2 * speedMultiplier);
 
       if (pipes.length && pipes[0].x + PIPE_WIDTH < 0) {
         pipes.shift();
@@ -212,7 +212,7 @@
         ctx.font = "40px sans-serif";
         ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
         ctx.font = "20px sans-serif";
-        ctx.fillText("Touch / Click to restart", canvas.width / 2 - 100, canvas.height / 2 + 30);
+        ctx.fillText("Click to restart", canvas.width / 2 - 80, canvas.height / 2 + 30);
       }
     }
 
@@ -226,7 +226,7 @@
     canvas.addEventListener("mousedown", () => {
       if (gameOver) {
         resetGame();
-      } else {
+      } else if (!isPaused) {
         birch.velocity = FLAP;
       }
     });
@@ -237,34 +237,58 @@
     function parseCommand(input) {
       const args = input.trim().toLowerCase().split(" ");
       const cmd = args[0];
-      const sub = args[1] === "mode" ? args[2] : args[1];
+      const val = args[1];
+
+      let accepted = false;
 
       if (cmd === "/immortal") {
-        if (sub === "on") {
+        if (val === "on") {
           isImmortal = true;
           cmdResult.textContent = "IMMORTAL MODE: ON";
-        } else if (sub === "off") {
+          accepted = true;
+        } else if (val === "off") {
           isImmortal = false;
           cmdResult.textContent = "IMMORTAL MODE: OFF";
+          accepted = true;
         } else {
-          cmdResult.textContent = "Usage: /immortal [on|off]";
+          cmdResult.textContent = "Usage: /immortal on|off";
         }
       } else if (cmd === "/ghost") {
-        if (sub === "on") {
+        if (val === "on") {
           isGhost = true;
           cmdResult.textContent = "GHOST MODE: ON";
-        } else if (sub === "off") {
+          accepted = true;
+        } else if (val === "off") {
           isGhost = false;
           cmdResult.textContent = "GHOST MODE: OFF";
+          accepted = true;
         } else {
-          cmdResult.textContent = "Usage: /ghost [on|off]";
+          cmdResult.textContent = "Usage: /ghost on|off";
+        }
+      } else if (cmd === "/speed") {
+        const speed = parseInt(val);
+        if (!isNaN(speed) && speed >= 1 && speed <= 10) {
+          speedMultiplier = speed;
+          cmdResult.textContent = `SPEED set to ${speed}x`;
+          accepted = true;
+        } else {
+          cmdResult.textContent = "Usage: /speed <1–10>";
         }
       } else {
         cmdResult.textContent = "Unknown command.";
       }
 
       updateStatus();
+
+      if (accepted) {
+        cmdInput.blur();
+        isPaused = false;
+      }
     }
+
+    cmdInput.addEventListener("focus", () => {
+      isPaused = true;
+    });
 
     cmdInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
