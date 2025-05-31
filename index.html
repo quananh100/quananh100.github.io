@@ -1,21 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Flappy Birch</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
+      height: 100%;
       background: #70c5ce;
       font-family: sans-serif;
     }
 
     canvas {
       display: block;
-      margin: auto;
-      background: #70c5ce;
+      position: absolute;
+      top: 0;
+      left: 0;
     }
 
     #score {
@@ -28,20 +30,70 @@
       text-shadow: 2px 2px #000;
       z-index: 10;
     }
+
+    #console {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      padding: 8px;
+      font-size: 14px;
+      border-radius: 5px;
+    }
+
+    #console input {
+      background: transparent;
+      border: none;
+      color: white;
+      outline: none;
+      width: 160px;
+    }
+
+    #console .result {
+      margin-top: 4px;
+      font-size: 13px;
+      color: #00ffcc;
+    }
+
+    #status {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      color: white;
+      font-size: 14px;
+      text-align: right;
+      text-shadow: 1px 1px #000;
+      z-index: 10;
+    }
   </style>
 </head>
 <body>
   <div id="score">0</div>
-  <canvas id="gameCanvas" width="400" height="600"></canvas>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="console">
+    <div>> <input id="cmdInput" type="text" placeholder="/command..." /></div>
+    <div class="result" id="cmdResult"></div>
+  </div>
+
+  <div id="status"></div>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
     const GRAVITY = 0.5;
     const FLAP = -8;
     const PIPE_WIDTH = 60;
-    const PIPE_GAP = 150;
+    const PIPE_GAP = 180;
     const BIRCH_WIDTH = 34;
     const BIRCH_HEIGHT = 24;
 
@@ -56,18 +108,37 @@
     let pipes = [];
     let score = 0;
     let gameOver = false;
+    let frames = 0;
+
+    let isImmortal = false;
+    let isGhost = false;
+
+    let birchImage = new Image();
+    birchImage.src = "birch.png"; // đặt cạnh file HTML
+
+    birchImage.onerror = () => {
+      // fallback nếu ảnh không tải được
+      birchImage = null;
+    };
+
+    function updateStatus() {
+      document.getElementById("status").innerHTML =
+        (isImmortal ? "IMMORTAL: ON" : "IMMORTAL: OFF") + "<br>" +
+        (isGhost ? "GHOST: ON" : "GHOST: OFF");
+    }
 
     function resetGame() {
-      birch.y = 200;
+      birch.y = canvas.height / 2;
       birch.velocity = 0;
       pipes = [];
       score = 0;
       gameOver = false;
       document.getElementById("score").textContent = "0";
+      frames = 0;
     }
 
     function spawnPipe() {
-      const topHeight = Math.floor(Math.random() * 250) + 50;
+      const topHeight = Math.floor(Math.random() * (canvas.height - PIPE_GAP - 100)) + 50;
       const bottomY = topHeight + PIPE_GAP;
       pipes.push({
         x: canvas.width,
@@ -77,16 +148,18 @@
     }
 
     function drawBirch() {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(birch.x, birch.y, birch.width, birch.height);
+      if (birchImage && birchImage.complete) {
+        ctx.drawImage(birchImage, birch.x, birch.y, birch.width, birch.height);
+      } else {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(birch.x, birch.y, birch.width, birch.height);
+      }
     }
 
     function drawPipes() {
       ctx.fillStyle = "#228B22";
       pipes.forEach(pipe => {
-        // Top pipe
         ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.top);
-        // Bottom pipe
         ctx.fillRect(pipe.x, canvas.height - pipe.bottom, PIPE_WIDTH, pipe.bottom);
       });
     }
@@ -97,37 +170,32 @@
       birch.velocity += GRAVITY;
       birch.y += birch.velocity;
 
-      // Spawn pipes
       if (frames % 90 === 0) {
         spawnPipe();
       }
 
-      // Move pipes
       pipes.forEach(pipe => pipe.x -= 2);
 
-      // Remove offscreen pipes
       if (pipes.length && pipes[0].x + PIPE_WIDTH < 0) {
         pipes.shift();
         score++;
         document.getElementById("score").textContent = score;
       }
 
-      // Collision
       pipes.forEach(pipe => {
-        if (
+        const collide =
           birch.x < pipe.x + PIPE_WIDTH &&
           birch.x + birch.width > pipe.x &&
           (
             birch.y < pipe.top ||
             birch.y + birch.height > canvas.height - pipe.bottom
-          )
-        ) {
+          );
+        if (collide && !isImmortal && !isGhost) {
           gameOver = true;
         }
       });
 
-      // Ground / ceiling
-      if (birch.y + birch.height > canvas.height || birch.y < 0) {
+      if ((birch.y + birch.height > canvas.height || birch.y < 0) && !isImmortal) {
         gameOver = true;
       }
     }
@@ -144,11 +212,9 @@
         ctx.font = "40px sans-serif";
         ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
         ctx.font = "20px sans-serif";
-        ctx.fillText("Click to restart", canvas.width / 2 - 70, canvas.height / 2 + 30);
+        ctx.fillText("Touch / Click to restart", canvas.width / 2 - 100, canvas.height / 2 + 30);
       }
     }
-
-    let frames = 0;
 
     function loop() {
       update();
@@ -157,7 +223,7 @@
       requestAnimationFrame(loop);
     }
 
-    canvas.addEventListener("click", () => {
+    canvas.addEventListener("mousedown", () => {
       if (gameOver) {
         resetGame();
       } else {
@@ -165,6 +231,49 @@
       }
     });
 
+    const cmdInput = document.getElementById("cmdInput");
+    const cmdResult = document.getElementById("cmdResult");
+
+    function parseCommand(input) {
+      const args = input.trim().toLowerCase().split(" ");
+      const cmd = args[0];
+      const sub = args[1] === "mode" ? args[2] : args[1];
+
+      if (cmd === "/immortal") {
+        if (sub === "on") {
+          isImmortal = true;
+          cmdResult.textContent = "IMMORTAL MODE: ON";
+        } else if (sub === "off") {
+          isImmortal = false;
+          cmdResult.textContent = "IMMORTAL MODE: OFF";
+        } else {
+          cmdResult.textContent = "Usage: /immortal [on|off]";
+        }
+      } else if (cmd === "/ghost") {
+        if (sub === "on") {
+          isGhost = true;
+          cmdResult.textContent = "GHOST MODE: ON";
+        } else if (sub === "off") {
+          isGhost = false;
+          cmdResult.textContent = "GHOST MODE: OFF";
+        } else {
+          cmdResult.textContent = "Usage: /ghost [on|off]";
+        }
+      } else {
+        cmdResult.textContent = "Unknown command.";
+      }
+
+      updateStatus();
+    }
+
+    cmdInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        parseCommand(cmdInput.value);
+        cmdInput.value = "";
+      }
+    });
+
+    updateStatus();
     loop();
   </script>
 </body>
