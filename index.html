@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Flappy Birch</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #70c5ce;
+      font-family: sans-serif;
+    }
+
+    canvas {
+      display: block;
+      margin: auto;
+      background: #70c5ce;
+    }
+
+    #score {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 32px;
+      color: white;
+      text-shadow: 2px 2px #000;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">0</div>
+  <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const GRAVITY = 0.5;
+    const FLAP = -8;
+    const PIPE_WIDTH = 60;
+    const PIPE_GAP = 150;
+    const BIRCH_WIDTH = 34;
+    const BIRCH_HEIGHT = 24;
+
+    let birch = {
+      x: 80,
+      y: 200,
+      width: BIRCH_WIDTH,
+      height: BIRCH_HEIGHT,
+      velocity: 0
+    };
+
+    let pipes = [];
+    let score = 0;
+    let gameOver = false;
+
+    function resetGame() {
+      birch.y = 200;
+      birch.velocity = 0;
+      pipes = [];
+      score = 0;
+      gameOver = false;
+      document.getElementById("score").textContent = "0";
+    }
+
+    function spawnPipe() {
+      const topHeight = Math.floor(Math.random() * 250) + 50;
+      const bottomY = topHeight + PIPE_GAP;
+      pipes.push({
+        x: canvas.width,
+        top: topHeight,
+        bottom: canvas.height - bottomY
+      });
+    }
+
+    function drawBirch() {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(birch.x, birch.y, birch.width, birch.height);
+    }
+
+    function drawPipes() {
+      ctx.fillStyle = "#228B22";
+      pipes.forEach(pipe => {
+        // Top pipe
+        ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.top);
+        // Bottom pipe
+        ctx.fillRect(pipe.x, canvas.height - pipe.bottom, PIPE_WIDTH, pipe.bottom);
+      });
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      birch.velocity += GRAVITY;
+      birch.y += birch.velocity;
+
+      // Spawn pipes
+      if (frames % 90 === 0) {
+        spawnPipe();
+      }
+
+      // Move pipes
+      pipes.forEach(pipe => pipe.x -= 2);
+
+      // Remove offscreen pipes
+      if (pipes.length && pipes[0].x + PIPE_WIDTH < 0) {
+        pipes.shift();
+        score++;
+        document.getElementById("score").textContent = score;
+      }
+
+      // Collision
+      pipes.forEach(pipe => {
+        if (
+          birch.x < pipe.x + PIPE_WIDTH &&
+          birch.x + birch.width > pipe.x &&
+          (
+            birch.y < pipe.top ||
+            birch.y + birch.height > canvas.height - pipe.bottom
+          )
+        ) {
+          gameOver = true;
+        }
+      });
+
+      // Ground / ceiling
+      if (birch.y + birch.height > canvas.height || birch.y < 0) {
+        gameOver = true;
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBirch();
+      drawPipes();
+
+      if (gameOver) {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#fff";
+        ctx.font = "40px sans-serif";
+        ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
+        ctx.font = "20px sans-serif";
+        ctx.fillText("Click to restart", canvas.width / 2 - 70, canvas.height / 2 + 30);
+      }
+    }
+
+    let frames = 0;
+
+    function loop() {
+      update();
+      draw();
+      frames++;
+      requestAnimationFrame(loop);
+    }
+
+    canvas.addEventListener("click", () => {
+      if (gameOver) {
+        resetGame();
+      } else {
+        birch.velocity = FLAP;
+      }
+    });
+
+    loop();
+  </script>
+</body>
+</html>
