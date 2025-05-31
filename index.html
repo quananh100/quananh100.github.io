@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Flappy Birch with Antiban</title>
+<title>Flappy Birch Hidden Hack</title>
 <style>
   html, body {
     margin:0; padding:0; overflow:hidden; height:100%;
@@ -30,6 +30,7 @@
     outline: none;
     box-shadow: 0 0 10px #3336 inset;
     background: rgba(255 255 255 / 0.9);
+    z-index: 10;
   }
   #bannedOverlay {
     position: fixed;
@@ -66,7 +67,6 @@
   const bannedOverlay = document.getElementById('bannedOverlay');
   const banCountdown = document.getElementById('banCountdown');
 
-  // Resize canvas full screen
   function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -74,7 +74,6 @@
   window.addEventListener('resize', resize);
   resize();
 
-  // Game variables
   let bird = { x: 50, y: 150, width: 34, height: 24, velocity: 0, gravity: 0.6, lift: -12 };
   let pipes = [];
   let frame = 0;
@@ -86,7 +85,6 @@
   let speed = 1;
   let inputActive = false;
 
-  // Handle banned overlay
   function showBanOverlay() {
     bannedOverlay.style.display = 'flex';
   }
@@ -94,7 +92,6 @@
     bannedOverlay.style.display = 'none';
   }
 
-  // Countdown timer for ban
   let banTimerInterval = null;
   function startBanTimer() {
     if (banTimerInterval) clearInterval(banTimerInterval);
@@ -107,6 +104,7 @@
         clearInterval(banTimerInterval);
         gameOver = false;
         resetGame();
+        gameLoop();
       } else {
         let diff = bannedUntil - now;
         let min = Math.floor(diff / 60000);
@@ -116,9 +114,8 @@
     }, 250);
   }
 
-  // Ban player for 1 minute
   function banPlayer() {
-    if (antiban) return; // Do not ban if antiban on
+    if (antiban) return;
     const now = Date.now();
     bannedUntil = now + 60000;
     localStorage.setItem('bannedUntil', bannedUntil);
@@ -127,7 +124,6 @@
     gameOver = true;
   }
 
-  // Reset game
   function resetGame() {
     bird.y = 150;
     bird.velocity = 0;
@@ -138,14 +134,12 @@
     hideBanOverlay();
   }
 
-  // Add pipes
   function addPipe() {
     const gap = 120;
     const pipeTopHeight = Math.random() * (canvas.height / 2);
-    pipes.push({ x: canvas.width, top: pipeTopHeight, bottom: pipeTopHeight + gap });
+    pipes.push({ x: canvas.width, top: pipeTopHeight, bottom: pipeTopHeight + gap, passed: false });
   }
 
-  // Draw functions
   function drawBird() {
     ctx.fillStyle = ghost ? 'rgba(255,255,255,0.5)' : '#FF0';
     ctx.beginPath();
@@ -165,31 +159,24 @@
     ctx.fillText(`Score: ${score}`, 10, 40);
   }
 
-  // Game loop
   function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    if (gameOver) {
-      ctx.fillStyle = '#FFF';
-      ctx.font = '40px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Game Over', canvas.width/2, canvas.height/2);
+    if (inputActive || gameOver) {
+      requestAnimationFrame(gameLoop);
       return;
     }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     frame++;
     if (frame % 90 === 0) addPipe();
 
-    // Bird physics
     bird.velocity += bird.gravity * speed;
     bird.y += bird.velocity;
 
-    // Pipes movement
     pipes.forEach(pipe => {
       pipe.x -= 3 * speed;
     });
     pipes = pipes.filter(pipe => pipe.x + 40 > 0);
 
-    // Check collision with pipes (unless ghost)
     if (!ghost) {
       for (let pipe of pipes) {
         if (
@@ -198,16 +185,15 @@
           (bird.y - bird.height/2 < pipe.top || bird.y + bird.height/2 > pipe.bottom)
         ) {
           banPlayer();
+          break;
         }
       }
     }
 
-    // Check collision with ground or ceiling
     if (!ghost && (bird.y + bird.height/2 > canvas.height || bird.y - bird.height/2 < 0)) {
       banPlayer();
     }
 
-    // Score counting
     pipes.forEach(pipe => {
       if (!pipe.passed && pipe.x + 40 < bird.x) {
         score++;
@@ -219,18 +205,23 @@
     drawBird();
     drawScore();
 
-    if (!gameOver) requestAnimationFrame(gameLoop);
+    requestAnimationFrame(gameLoop);
   }
 
-  // Command input handling
+  function jump() {
+    if (gameOver || inputActive) return;
+    bird.velocity = bird.lift * speed;
+  }
+  canvas.addEventListener('click', jump);
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space') jump();
+  });
+
   input.addEventListener('focus', () => {
     inputActive = true;
-    // Pause game when typing command
   });
   input.addEventListener('blur', () => {
     inputActive = false;
-    // Resume game when done typing
-    if (!gameOver) gameLoop();
   });
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
@@ -251,21 +242,12 @@
         if (val > 10) val = 10;
         speed = val;
         alert('Speed set to ' + speed);
-      } else if (cmd === '/antiban on') {
-        antiban = true;
-        localStorage.setItem('antiban', 'true');
-        alert('Anti-Ban ENABLED');
-      } else if (cmd === '/antiban off') {
-        antiban = false;
-        localStorage.removeItem('antiban');
-        alert('Anti-Ban DISABLED');
       } else {
         alert('Unknown command');
       }
     }
   });
 
-  // On load
   if (bannedUntil > Date.now()) {
     showBanOverlay();
     startBanTimer();
@@ -274,20 +256,15 @@
     resetGame();
     gameLoop();
   }
+
   antiban = localStorage.getItem('antiban') === 'true';
 
-  // Expose antiban toggle to bookmarklet
+  // Không còn lệnh /antiban trong game, chỉ bí mật qua bookmarklet
   window.enableAntiBan = () => {
     antiban = true;
     localStorage.setItem('antiban', 'true');
     alert('Anti-Ban ENABLED');
   };
-  window.disableAntiBan = () => {
-    antiban = false;
-    localStorage.removeItem('antiban');
-    alert('Anti-Ban DISABLED');
-  };
-
 })();
 </script>
 
