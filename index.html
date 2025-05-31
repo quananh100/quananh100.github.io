@@ -1,62 +1,57 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>Flappy Birch Hidden Hack</title>
-<style>
-  html, body {
-    margin:0; padding:0; overflow:hidden; height:100%;
-    background:#70c5ce;
-    font-family: sans-serif;
-  }
-  #gameCanvas {
-    display: block;
-    margin: 0 auto;
-    background: #70c5ce;
-    width: 100vw;
-    height: 100vh;
-  }
-  #commandInput {
-    position: fixed;
-    bottom: 10px; left: 50%;
-    transform: translateX(-50%);
-    width: 80vw;
-    max-width: 400px;
-    padding: 10px;
-    font-size: 18px;
-    border-radius: 6px;
-    border: none;
-    outline: none;
-    box-shadow: 0 0 10px #3336 inset;
-    background: rgba(255 255 255 / 0.9);
-    z-index: 10;
-  }
-  #bannedOverlay {
-    position: fixed;
-    top:0; left:0; right:0; bottom:0;
-    background: rgba(0,0,0,0.85);
-    color: #fff;
-    font-size: 30px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-    text-align: center;
-    padding: 20px;
-    display: none;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+  <title>Flappy Birch</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; overflow: hidden;
+      width: 100%; height: 100%;
+      background: #70c5ce;
+      font-family: sans-serif;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100vw; height: 100vh;
+      background: #70c5ce;
+    }
+    #commandInput {
+      position: fixed;
+      bottom: 10px; left: 50%;
+      transform: translateX(-50%);
+      width: 80vw; max-width: 400px;
+      font-size: 18px; padding: 10px;
+      border-radius: 6px; border: none;
+      outline: none;
+      background: rgba(255,255,255,0.9);
+      z-index: 10;
+    }
+    #bannedOverlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      font-size: 30px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 999;
+    }
+    #banCountdown {
+      font-size: 48px;
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
 
 <canvas id="gameCanvas"></canvas>
-<input id="commandInput" placeholder="Enter command, e.g. /ghost on" autocomplete="off" />
-
+<input id="commandInput" placeholder="Enter command..." />
 <div id="bannedOverlay">
   <div>You have been banned!</div>
-  <div id="banCountdown" style="margin-top:15px; font-size:48px; font-weight:bold;"></div>
+  <div id="banCountdown">01:00</div>
 </div>
 
 <script>
@@ -64,8 +59,8 @@
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
   const input = document.getElementById('commandInput');
-  const bannedOverlay = document.getElementById('bannedOverlay');
-  const banCountdown = document.getElementById('banCountdown');
+  const overlay = document.getElementById('bannedOverlay');
+  const countdown = document.getElementById('banCountdown');
 
   function resize() {
     canvas.width = window.innerWidth;
@@ -74,161 +69,116 @@
   window.addEventListener('resize', resize);
   resize();
 
-  let bird = { x: 50, y: 150, width: 34, height: 24, velocity: 0, gravity: 0.6, lift: -12 };
+  let bird = { x: 50, y: 150, w: 30, h: 24, v: 0, g: 0.6, jump: -12 };
   let pipes = [];
-  let frame = 0;
   let score = 0;
+  let frame = 0;
   let gameOver = false;
-  let bannedUntil = localStorage.getItem('bannedUntil') ? parseInt(localStorage.getItem('bannedUntil')) : 0;
-  let antiban = localStorage.getItem('antiban') === 'true';
+
   let ghost = false;
   let speed = 1;
+  let antiban = localStorage.getItem('antiban') === 'true';
+  let bannedUntil = parseInt(localStorage.getItem('bannedUntil') || 0);
   let inputActive = false;
 
-  function showBanOverlay() {
-    bannedOverlay.style.display = 'flex';
+  function showBan() {
+    overlay.style.display = 'flex';
   }
-  function hideBanOverlay() {
-    bannedOverlay.style.display = 'none';
+  function hideBan() {
+    overlay.style.display = 'none';
+  }
+  function updateCountdown() {
+    let now = Date.now();
+    let diff = bannedUntil - now;
+    if (diff <= 0) {
+      clearInterval(timer);
+      bannedUntil = 0;
+      localStorage.removeItem('bannedUntil');
+      hideBan();
+      resetGame();
+      gameLoop();
+    } else {
+      let m = Math.floor(diff / 60000);
+      let s = Math.floor((diff % 60000) / 1000);
+      countdown.textContent = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
   }
 
-  let banTimerInterval = null;
-  function startBanTimer() {
-    if (banTimerInterval) clearInterval(banTimerInterval);
-    banTimerInterval = setInterval(() => {
-      const now = Date.now();
-      if (now >= bannedUntil) {
-        bannedUntil = 0;
-        localStorage.removeItem('bannedUntil');
-        hideBanOverlay();
-        clearInterval(banTimerInterval);
-        gameOver = false;
-        resetGame();
-        gameLoop();
-      } else {
-        let diff = bannedUntil - now;
-        let min = Math.floor(diff / 60000);
-        let sec = Math.floor((diff % 60000) / 1000);
-        banCountdown.textContent = `${min.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
-      }
-    }, 250);
+  let timer;
+  if (bannedUntil > Date.now()) {
+    showBan();
+    updateCountdown();
+    timer = setInterval(updateCountdown, 1000);
+    return;
   }
 
   function banPlayer() {
     if (antiban) return;
-    const now = Date.now();
-    bannedUntil = now + 60000;
+    bannedUntil = Date.now() + 60000;
     localStorage.setItem('bannedUntil', bannedUntil);
-    showBanOverlay();
-    startBanTimer();
+    showBan();
+    updateCountdown();
+    timer = setInterval(updateCountdown, 1000);
     gameOver = true;
   }
 
   function resetGame() {
     bird.y = 150;
-    bird.velocity = 0;
+    bird.v = 0;
     pipes = [];
     frame = 0;
     score = 0;
     gameOver = false;
-    hideBanOverlay();
+    hideBan();
   }
 
   function addPipe() {
     const gap = 120;
-    const pipeTopHeight = Math.random() * (canvas.height / 2);
-    pipes.push({ x: canvas.width, top: pipeTopHeight, bottom: pipeTopHeight + gap, passed: false });
+    const top = Math.random() * (canvas.height / 2);
+    pipes.push({ x: canvas.width, top: top, bottom: top + gap, passed: false });
   }
 
   function drawBird() {
-    ctx.fillStyle = ghost ? 'rgba(255,255,255,0.5)' : '#FF0';
+    ctx.fillStyle = ghost ? 'rgba(255,255,255,0.5)' : '#ff0';
     ctx.beginPath();
-    ctx.ellipse(bird.x, bird.y, bird.width/2, bird.height/2, 0, 0, 2 * Math.PI);
+    ctx.ellipse(bird.x, bird.y, bird.w/2, bird.h/2, 0, 0, 2 * Math.PI);
     ctx.fill();
   }
+
   function drawPipes() {
-    ctx.fillStyle = '#0A0';
-    pipes.forEach(pipe => {
-      ctx.fillRect(pipe.x, 0, 40, pipe.top);
-      ctx.fillRect(pipe.x, pipe.bottom, 40, canvas.height - pipe.bottom);
-    });
+    ctx.fillStyle = '#0a0';
+    for (let p of pipes) {
+      ctx.fillRect(p.x, 0, 40, p.top);
+      ctx.fillRect(p.x, p.bottom, 40, canvas.height - p.bottom);
+    }
   }
+
   function drawScore() {
-    ctx.fillStyle = '#FFF';
-    ctx.font = '30px sans-serif';
-    ctx.fillText(`Score: ${score}`, 10, 40);
-  }
-
-  function gameLoop() {
-    if (inputActive || gameOver) {
-      requestAnimationFrame(gameLoop);
-      return;
-    }
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    frame++;
-    if (frame % 90 === 0) addPipe();
-
-    bird.velocity += bird.gravity * speed;
-    bird.y += bird.velocity;
-
-    pipes.forEach(pipe => {
-      pipe.x -= 3 * speed;
-    });
-    pipes = pipes.filter(pipe => pipe.x + 40 > 0);
-
-    if (!ghost) {
-      for (let pipe of pipes) {
-        if (
-          bird.x + bird.width/2 > pipe.x &&
-          bird.x - bird.width/2 < pipe.x + 40 &&
-          (bird.y - bird.height/2 < pipe.top || bird.y + bird.height/2 > pipe.bottom)
-        ) {
-          banPlayer();
-          break;
-        }
-      }
-    }
-
-    if (!ghost && (bird.y + bird.height/2 > canvas.height || bird.y - bird.height/2 < 0)) {
-      banPlayer();
-    }
-
-    pipes.forEach(pipe => {
-      if (!pipe.passed && pipe.x + 40 < bird.x) {
-        score++;
-        pipe.passed = true;
-      }
-    });
-
-    drawPipes();
-    drawBird();
-    drawScore();
-
-    requestAnimationFrame(gameLoop);
+    ctx.fillStyle = '#fff';
+    ctx.font = '24px sans-serif';
+    ctx.fillText("Score: " + score, 10, 30);
   }
 
   function jump() {
     if (gameOver || inputActive) return;
-    bird.velocity = bird.lift * speed;
+    bird.v = bird.jump * speed;
   }
+
   canvas.addEventListener('click', jump);
   window.addEventListener('keydown', e => {
     if (e.code === 'Space') jump();
   });
 
-  input.addEventListener('focus', () => {
-    inputActive = true;
-  });
-  input.addEventListener('blur', () => {
-    inputActive = false;
-  });
+  input.addEventListener('focus', () => inputActive = true);
+  input.addEventListener('blur', () => inputActive = false);
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       const cmd = input.value.trim().toLowerCase();
       input.value = '';
-      if (!cmd.startsWith('/')) return;
       input.blur();
+      inputActive = false;
+
+      if (!cmd.startsWith('/')) return;
 
       if (cmd === '/ghost on') {
         ghost = true;
@@ -237,34 +187,74 @@
         ghost = false;
         alert('Ghost mode OFF');
       } else if (cmd.startsWith('/speed ')) {
-        let val = parseInt(cmd.split(' ')[1]);
-        if (isNaN(val) || val < 1) val = 1;
-        if (val > 10) val = 10;
-        speed = val;
-        alert('Speed set to ' + speed);
-      } else {
-        alert('Unknown command');
+        const n = parseInt(cmd.split(' ')[1]);
+        if (!isNaN(n) && n >= 1 && n <= 10) {
+          speed = n;
+          alert(`Speed set to ${speed}`);
+        }
+      }
+
+      // Kiểm tra xem đang ghost hoặc speed cao mà không bật antiban
+      if (!antiban && (ghost || speed > 1)) {
+        banPlayer();
       }
     }
   });
 
-  if (bannedUntil > Date.now()) {
-    showBanOverlay();
-    startBanTimer();
-  } else {
-    hideBanOverlay();
-    resetGame();
-    gameLoop();
+  function gameLoop() {
+    if (gameOver || inputActive) {
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    frame++;
+    if (frame % 90 === 0) addPipe();
+
+    bird.v += bird.g * speed;
+    bird.y += bird.v;
+
+    for (let pipe of pipes) {
+      pipe.x -= 3 * speed;
+    }
+
+    pipes = pipes.filter(p => p.x + 40 > 0);
+
+    if (!ghost) {
+      for (let p of pipes) {
+        if (
+          bird.x + bird.w/2 > p.x &&
+          bird.x - bird.w/2 < p.x + 40 &&
+          (bird.y - bird.h/2 < p.top || bird.y + bird.h/2 > p.bottom)
+        ) {
+          banPlayer();
+          return;
+        }
+      }
+
+      if (bird.y + bird.h/2 > canvas.height || bird.y < 0) {
+        banPlayer();
+        return;
+      }
+    }
+
+    for (let p of pipes) {
+      if (!p.passed && p.x + 40 < bird.x) {
+        score++;
+        p.passed = true;
+      }
+    }
+
+    drawPipes();
+    drawBird();
+    drawScore();
+
+    requestAnimationFrame(gameLoop);
   }
 
-  antiban = localStorage.getItem('antiban') === 'true';
-
-  // Không còn lệnh /antiban trong game, chỉ bí mật qua bookmarklet
-  window.enableAntiBan = () => {
-    antiban = true;
-    localStorage.setItem('antiban', 'true');
-    alert('Anti-Ban ENABLED');
-  };
+  resetGame();
+  gameLoop();
 })();
 </script>
 
