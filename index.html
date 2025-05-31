@@ -62,8 +62,8 @@
 <div id="bannedOverlay">
   <div>You have been banned!</div>
   <div id="banCountdown">01:00</div>
+  <button id="resetButton">Reset</button>
 </div>
-<button id="resetButton">Reset</button>
 
 <script>
 (() => {
@@ -92,6 +92,7 @@
   let antiban = localStorage.getItem('antiban') === 'true';
   let bannedUntil = parseInt(localStorage.getItem('bannedUntil') || 0);
   let inputActive = false;
+  let timer;
 
   function showBan() {
     overlay.style.display = 'flex';
@@ -120,12 +121,11 @@
     }
   }
 
-  let timer;
   if (bannedUntil > Date.now()) {
     showBan();
     updateCountdown();
     timer = setInterval(updateCountdown, 1000);
-    return;
+    gameOver = true;
   }
 
   function banPlayer() {
@@ -145,7 +145,8 @@
     frame = 0;
     score = 0;
     gameOver = false;
-    hideBan();
+    ghost = false;
+    speed = 1;
   }
 
   function addPipe() {
@@ -221,6 +222,7 @@
   resetBtn.addEventListener('click', () => {
     if (bannedUntil <= Date.now()) {
       resetGame();
+      hideBan();
       gameLoop();
     }
   });
@@ -277,8 +279,10 @@
     requestAnimationFrame(gameLoop);
   }
 
-  resetGame();
-  gameLoop();
+  if (!gameOver) {
+    resetGame();
+    gameLoop();
+  }
 })();
 </script>
 
