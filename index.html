@@ -13,14 +13,12 @@
       background: #70c5ce;
       font-family: sans-serif;
     }
-
     canvas {
       display: block;
       position: absolute;
       top: 0;
       left: 0;
     }
-
     #score {
       position: absolute;
       top: 20px;
@@ -31,7 +29,6 @@
       text-shadow: 2px 2px #000;
       z-index: 10;
     }
-
     #console {
       position: absolute;
       bottom: 10px;
@@ -43,7 +40,6 @@
       border-radius: 5px;
       z-index: 20;
     }
-
     #console input {
       background: transparent;
       border: none;
@@ -51,13 +47,12 @@
       outline: none;
       width: 180px;
     }
-
     #console .result {
       margin-top: 4px;
       font-size: 13px;
       color: #00ffcc;
+      min-height: 18px;
     }
-
     #status {
       position: absolute;
       bottom: 10px;
@@ -67,6 +62,27 @@
       text-align: right;
       text-shadow: 1px 1px #000;
       z-index: 10;
+      min-width: 120px;
+    }
+    #bannedMessage {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(255,0,0,0.95);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 36px;
+      font-weight: bold;
+      text-align: center;
+      user-select: none;
+      z-index: 9999;
+      box-shadow: 0 0 30px 10px red;
+      display: none;
+      padding: 20px;
+      box-sizing: border-box;
     }
   </style>
 </head>
@@ -79,7 +95,12 @@
     <div class="result" id="cmdResult"></div>
   </div>
 
-  <div id="status"></div>
+  <div id="status">
+    GHOST: OFF<br>
+    SPEED: 1x
+  </div>
+
+  <div id="bannedMessage">You have been banned for 1:00</div>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
@@ -112,18 +133,26 @@
     let gameOver = false;
     let frames = 0;
 
-    let isImmortal = false;
     let isGhost = false;
     let speedMultiplier = 1;
     let isPaused = false;
 
+    let isBanned = false;
+    let bannedExpireTime = 0;
+
     let birchImage = new Image();
-    birchImage.src = "birch.png"; // Optional skin image
+    birchImage.src = "birch.png";
     birchImage.onerror = () => { birchImage = null; };
 
+    const scoreDiv = document.getElementById("score");
+    const cmdInput = document.getElementById("cmdInput");
+    const cmdResult = document.getElementById("cmdResult");
+    const statusDiv = document.getElementById("status");
+    const bannedMessage = document.getElementById("bannedMessage");
+    const metaViewport = document.querySelector('meta[name=viewport]');
+
     function updateStatus() {
-      document.getElementById("status").innerHTML =
-        `IMMORTAL: ${isImmortal ? 'ON' : 'OFF'}<br>` +
+      statusDiv.innerHTML =
         `GHOST: ${isGhost ? 'ON' : 'OFF'}<br>` +
         `SPEED: ${speedMultiplier}x`;
     }
@@ -134,8 +163,9 @@
       pipes = [];
       score = 0;
       gameOver = false;
-      document.getElementById("score").textContent = "0";
+      scoreDiv.textContent = "0";
       frames = 0;
+      checkBanStatus();
     }
 
     function spawnPipe() {
@@ -166,7 +196,7 @@
     }
 
     function update() {
-      if (gameOver || isPaused) return;
+      if (gameOver || isPaused || isBanned) return;
 
       birch.velocity += GRAVITY;
       birch.y += birch.velocity;
@@ -180,7 +210,7 @@
       if (pipes.length && pipes[0].x + PIPE_WIDTH < 0) {
         pipes.shift();
         score++;
-        document.getElementById("score").textContent = score;
+        scoreDiv.textContent = score;
       }
 
       pipes.forEach(pipe => {
@@ -191,12 +221,12 @@
             birch.y < pipe.top ||
             birch.y + birch.height > canvas.height - pipe.bottom
           );
-        if (collide && !isImmortal && !isGhost) {
+        if (collide && !isGhost) {
           gameOver = true;
         }
       });
 
-      if ((birch.y + birch.height > canvas.height || birch.y < 0) && !isImmortal) {
+      if ((birch.y + birch.height > canvas.height || birch.y < 0) && !isGhost) {
         gameOver = true;
       }
     }
@@ -220,21 +250,57 @@
     function loop() {
       update();
       draw();
+      updateBanTimer();
       frames++;
       requestAnimationFrame(loop);
     }
 
+    function showBannedMessage() {
+      bannedMessage.style.display = "flex";
+    }
+    function hideBannedMessage() {
+      bannedMessage.style.display = "none";
+    }
+
+    function checkBanStatus() {
+      if (isBanned) {
+        const now = Date.now();
+        if (now >= bannedExpireTime) {
+          isBanned = false;
+          hideBannedMessage();
+          isPaused = false;
+        } else {
+          showBannedMessage();
+          isPaused = true;
+        }
+      } else {
+        hideBannedMessage();
+        isPaused = false;
+      }
+    }
+
+    function updateBanTimer() {
+      if (!isBanned) return;
+      const now = Date.now();
+      let diff = Math.floor((bannedExpireTime - now) / 1000);
+      if (diff < 0) {
+        isBanned = false;
+        hideBannedMessage();
+        isPaused = false;
+        return;
+      }
+      const minutes = Math.floor(diff / 60);
+      const seconds = diff % 60;
+      bannedMessage.textContent = `You have been banned for ${minutes}:${seconds.toString().padStart(2,'0')}`;
+    }
+
     canvas.addEventListener("mousedown", () => {
-      if (gameOver) {
+      if (gameOver && !isBanned) {
         resetGame();
-      } else if (!isPaused) {
+      } else if (!isPaused && !isBanned) {
         birch.velocity = FLAP;
       }
     });
-
-    const cmdInput = document.getElementById("cmdInput");
-    const cmdResult = document.getElementById("cmdResult");
-    const metaViewport = document.querySelector('meta[name=viewport]');
 
     function parseCommand(input) {
       const args = input.trim().toLowerCase().split(" ");
@@ -243,19 +309,7 @@
 
       let accepted = false;
 
-      if (cmd === "/immortal") {
-        if (val === "on") {
-          isImmortal = true;
-          cmdResult.textContent = "IMMORTAL MODE: ON";
-          accepted = true;
-        } else if (val === "off") {
-          isImmortal = false;
-          cmdResult.textContent = "IMMORTAL MODE: OFF";
-          accepted = true;
-        } else {
-          cmdResult.textContent = "Usage: /immortal on|off";
-        }
-      } else if (cmd === "/ghost") {
+      if (cmd === "/ghost") {
         if (val === "on") {
           isGhost = true;
           cmdResult.textContent = "GHOST MODE: ON";
@@ -276,6 +330,12 @@
         } else {
           cmdResult.textContent = "Usage: /speed <1–10>";
         }
+      } else if (cmd === "/banned") {
+        isBanned = true;
+        bannedExpireTime = Date.now() + 60000;
+        cmdResult.textContent = "";
+        accepted = true;
+        checkBanStatus();
       } else {
         cmdResult.textContent = "Unknown command.";
       }
@@ -290,7 +350,6 @@
 
     cmdInput.addEventListener("focus", () => {
       isPaused = true;
-      // Fix iOS zoom
       metaViewport.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
     });
 
@@ -310,6 +369,7 @@
     });
 
     updateStatus();
+    checkBanStatus();
     loop();
   </script>
 </body>
