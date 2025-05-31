@@ -3,11 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>Flappy Birch</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       overflow: hidden;
       height: 100%;
       background: #70c5ce;
@@ -16,8 +15,7 @@
     canvas {
       display: block;
       position: absolute;
-      top: 0;
-      left: 0;
+      top: 0; left: 0;
     }
     #score {
       position: absolute;
@@ -81,15 +79,12 @@
       z-index: 9999;
       box-shadow: 0 0 30px 10px red;
       display: none;
-      padding: 20px;
-      box-sizing: border-box;
       flex-direction: column;
     }
     #bannedMessage small {
       font-size: 18px;
       margin-top: 20px;
       opacity: 0.8;
-      font-weight: normal;
     }
   </style>
 </head>
@@ -98,14 +93,11 @@
   <canvas id="gameCanvas"></canvas>
 
   <div id="console">
-    <div>> <input id="cmdInput" type="text" placeholder="/command..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /></div>
+    <div>> <input id="cmdInput" type="text" placeholder="/command..." autocomplete="off" /></div>
     <div class="result" id="cmdResult"></div>
   </div>
 
-  <div id="status">
-    GHOST: OFF<br>
-    SPEED: 1x
-  </div>
+  <div id="status">GHOST: OFF<br>SPEED: 1x</div>
 
   <div id="bannedMessage">
     You have been banned for <span id="banTimer">1:00</span>
@@ -120,35 +112,22 @@
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     }
-    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
 
-    const GRAVITY = 0.5;
     const FLAP = -8;
-    const PIPE_WIDTH = 60;
-    const PIPE_GAP = 180;
-    const BIRCH_WIDTH = 34;
-    const BIRCH_HEIGHT = 24;
+    const GRAVITY = 0.5;
+    const BIRCH_WIDTH = 34, BIRCH_HEIGHT = 24;
+    const PIPE_WIDTH = 60, PIPE_GAP = 180;
 
-    let birch = {
-      x: 80,
-      y: 200,
-      width: BIRCH_WIDTH,
-      height: BIRCH_HEIGHT,
-      velocity: 0
-    };
-
+    let birch = { x: 80, y: 200, width: BIRCH_WIDTH, height: BIRCH_HEIGHT, velocity: 0 };
     let pipes = [];
     let score = 0;
-    let gameOver = false;
     let frames = 0;
-
+    let gameOver = false;
     let isGhost = false;
     let speedMultiplier = 1;
     let isPaused = false;
-
-    let isBanned = false;
-    let bannedExpireTime = 0;
 
     const scoreDiv = document.getElementById("score");
     const cmdInput = document.getElementById("cmdInput");
@@ -156,95 +135,142 @@
     const statusDiv = document.getElementById("status");
     const bannedMessage = document.getElementById("bannedMessage");
     const banTimerSpan = document.getElementById("banTimer");
-    const metaViewport = document.querySelector('meta[name=viewport]');
 
-    // Load ban info from localStorage if present
-    if (localStorage.getItem('bannedExpireTime')) {
-      const expire = parseInt(localStorage.getItem('bannedExpireTime'), 10);
-      if (!isNaN(expire) && expire > Date.now()) {
-        isBanned = true;
-        bannedExpireTime = expire;
-        isPaused = true;
-        showBannedMessage();
+    let isBanned = false;
+    let bannedUntil = localStorage.getItem("bannedUntil") || 0;
+
+    function startBan(durationMs) {
+      isBanned = true;
+      bannedUntil = Date.now() + durationMs;
+      localStorage.setItem("bannedUntil", bannedUntil);
+      bannedMessage.style.display = "flex";
+      updateBanTimer();
+    }
+
+    function updateBanTimer() {
+      const remaining = Math.max(0, bannedUntil - Date.now());
+      const seconds = Math.floor((remaining / 1000) % 60);
+      const minutes = Math.floor(remaining / 60000);
+      banTimerSpan.textContent = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+      if (remaining > 0) {
+        requestAnimationFrame(updateBanTimer);
       } else {
-        localStorage.removeItem('bannedExpireTime');
+        isBanned = false;
+        bannedMessage.style.display = "none";
+        localStorage.removeItem("bannedUntil");
       }
     }
 
-    function updateStatus() {
-      statusDiv.innerHTML =
-        `GHOST: ${isGhost ? 'ON' : 'OFF'}<br>` +
-        `SPEED: ${speedMultiplier}x`;
+    if (bannedUntil > Date.now()) {
+      isBanned = true;
+      bannedMessage.style.display = "flex";
+      updateBanTimer();
     }
 
-    function resetGame() {
-      birch.y = canvas.height / 2;
-      birch.velocity = 0;
-      pipes = [];
-      score = 0;
-      gameOver = false;
-      scoreDiv.textContent = "0";
-      frames = 0;
-      // Keep banned state on reset
-      checkBanStatus();
+    function flap() {
+      if (!gameOver && !isPaused && !isBanned) {
+        birch.velocity = FLAP;
+      }
     }
 
-    function spawnPipe() {
-      const topHeight = Math.floor(Math.random() * (canvas.height - PIPE_GAP - 100)) + 50;
-      const bottomY = topHeight + PIPE_GAP;
-      pipes.push({
-        x: canvas.width,
-        top: topHeight,
-        bottom: canvas.height - bottomY
-      });
-    }
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Space") flap();
+    });
+
+    canvas.addEventListener("mousedown", flap);
+
+    cmdInput.addEventListener("focus", () => {
+      isPaused = true;
+    });
+
+    cmdInput.addEventListener("blur", () => {
+      isPaused = false;
+    });
+
+    cmdInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const input = cmdInput.value.trim();
+        cmdInput.value = "";
+        cmdResult.textContent = "";
+        isPaused = false;
+
+        if (input.startsWith("/ghost")) {
+          const arg = input.split(" ")[1];
+          if (arg === "on") {
+            isGhost = true;
+            statusDiv.innerHTML = `GHOST: ON<br>SPEED: ${speedMultiplier}x`;
+            startBan(60000);
+          } else if (arg === "off") {
+            isGhost = false;
+            statusDiv.innerHTML = `GHOST: OFF<br>SPEED: ${speedMultiplier}x`;
+          }
+        } else if (input.startsWith("/speed")) {
+          const value = parseInt(input.split(" ")[1]);
+          if (!isNaN(value) && value >= 1 && value <= 10) {
+            speedMultiplier = value;
+            statusDiv.innerHTML = `GHOST: ${isGhost ? "ON" : "OFF"}<br>SPEED: ${speedMultiplier}x`;
+            startBan(60000);
+          }
+        }
+      }
+    });
 
     function drawBirch() {
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = "yellow";
       ctx.fillRect(birch.x, birch.y, birch.width, birch.height);
     }
 
     function drawPipes() {
-      ctx.fillStyle = "#228B22";
-      pipes.forEach(pipe => {
+      ctx.fillStyle = "green";
+      for (let pipe of pipes) {
         ctx.fillRect(pipe.x, 0, PIPE_WIDTH, pipe.top);
-        ctx.fillRect(pipe.x, canvas.height - pipe.bottom, PIPE_WIDTH, pipe.bottom);
-      });
+        ctx.fillRect(pipe.x, pipe.top + PIPE_GAP, PIPE_WIDTH, canvas.height);
+      }
     }
 
-    function update() {
-      if (gameOver || isPaused || isBanned) return;
+    function updateGame() {
+      if (isPaused || isBanned) return;
 
       birch.velocity += GRAVITY;
       birch.y += birch.velocity;
 
-      if (frames % Math.floor(90 / speedMultiplier) === 0) {
-        spawnPipe();
+      if (++frames % Math.floor(100 / speedMultiplier) === 0) {
+        let top = Math.floor(Math.random() * (canvas.height - PIPE_GAP - 100)) + 50;
+        pipes.push({ x: canvas.width, top });
       }
 
-      pipes.forEach(pipe => pipe.x -= 2 * speedMultiplier);
-
-      if (pipes.length && pipes[0].x + PIPE_WIDTH < 0) {
-        pipes.shift();
-        score++;
-        scoreDiv.textContent = score;
+      for (let pipe of pipes) {
+        pipe.x -= 2 * speedMultiplier;
       }
 
-      pipes.forEach(pipe => {
-        const collide =
+      pipes = pipes.filter(p => p.x + PIPE_WIDTH > 0);
+
+      for (let pipe of pipes) {
+        if (!isGhost &&
           birch.x < pipe.x + PIPE_WIDTH &&
           birch.x + birch.width > pipe.x &&
-          (
-            birch.y < pipe.top ||
-            birch.y + birch.height > canvas.height - pipe.bottom
-          );
-        if (collide && !isGhost) {
+          (birch.y < pipe.top || birch.y + birch.height > pipe.top + PIPE_GAP)
+        ) {
           gameOver = true;
         }
-      });
 
-      if ((birch.y + birch.height > canvas.height || birch.y < 0) && !isGhost) {
+        if (pipe.x + PIPE_WIDTH === birch.x) {
+          score++;
+          scoreDiv.textContent = score;
+        }
+      }
+
+      if (birch.y + birch.height >= canvas.height || birch.y <= 0) {
         gameOver = true;
+      }
+
+      if (gameOver) {
+        pipes = [];
+        birch.y = 200;
+        birch.velocity = 0;
+        score = 0;
+        gameOver = false;
+        frames = 0;
       }
     }
 
@@ -252,145 +278,14 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawBirch();
       drawPipes();
-
-      if (gameOver) {
-        ctx.fillStyle = "rgba(0,0,0,0.5)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#fff";
-        ctx.font = "40px sans-serif";
-        ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
-        ctx.font = "20px sans-serif";
-        ctx.fillText("Click to restart", canvas.width / 2 - 80, canvas.height / 2 + 30);
-      }
     }
 
     function loop() {
-      update();
+      updateGame();
       draw();
-      updateBanTimer();
-      frames++;
       requestAnimationFrame(loop);
     }
 
-    function showBannedMessage() {
-      bannedMessage.style.display = "flex";
-    }
-    function hideBannedMessage() {
-      bannedMessage.style.display = "none";
-    }
-
-    function checkBanStatus() {
-      if (isBanned) {
-        const now = Date.now();
-        if (now >= bannedExpireTime) {
-          isBanned = false;
-          hideBannedMessage();
-          localStorage.removeItem('bannedExpireTime');
-          isPaused = false;
-        } else {
-          showBannedMessage();
-          isPaused = true;
-        }
-      } else {
-        hideBannedMessage();
-        isPaused = false;
-        localStorage.removeItem('bannedExpireTime');
-      }
-    }
-
-    function updateBanTimer() {
-      if (!isBanned) return;
-      const now = Date.now();
-      let diff = Math.floor((bannedExpireTime - now) / 1000);
-      if (diff < 0) {
-        isBanned = false;
-        hideBannedMessage();
-        localStorage.removeItem('bannedExpireTime');
-        isPaused = false;
-        return;
-      }
-      const minutes = Math.floor(diff / 60);
-      const seconds = diff % 60;
-      banTimerSpan.textContent = `${minutes}:${seconds.toString().padStart(2,'0')}`;
-    }
-
-    canvas.addEventListener("mousedown", () => {
-      if (gameOver && !isBanned) {
-        resetGame();
-      } else if (!isPaused && !isBanned) {
-        birch.velocity = FLAP;
-      }
-    });
-
-    function parseCommand(input) {
-      const args = input.trim().toLowerCase().split(" ");
-      const cmd = args[0];
-      const val = args[1];
-
-      let accepted = false;
-
-      if (cmd === "/ghost") {
-        if (val === "on") {
-          isGhost = true;
-          cmdResult.textContent = "GHOST MODE: ON";
-          accepted = true;
-        } else if (val === "off") {
-          isGhost = false;
-          cmdResult.textContent = "GHOST MODE: OFF";
-          accepted = true;
-        } else {
-          cmdResult.textContent = "Usage: /ghost on|off";
-        }
-      } else if (cmd === "/speed") {
-        const speed = parseInt(val);
-        if (!isNaN(speed) && speed >= 1 && speed <= 10) {
-          speedMultiplier = speed;
-          cmdResult.textContent = `SPEED set to ${speed}x`;
-          accepted = true;
-        } else {
-          cmdResult.textContent = "Usage: /speed <1–10>";
-        }
-      } else if (cmd === "/banned") {
-        isBanned = true;
-        bannedExpireTime = Date.now() + 60000;
-        localStorage.setItem('bannedExpireTime', bannedExpireTime.toString());
-        cmdResult.textContent = "";
-        accepted = true;
-        checkBanStatus();
-      } else {
-        cmdResult.textContent = "Unknown command.";
-      }
-
-      updateStatus();
-
-      if (accepted) {
-        cmdInput.blur();
-        isPaused = false;
-      }
-    }
-
-    cmdInput.addEventListener("focus", () => {
-      isPaused = true;
-      metaViewport.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
-    });
-
-    cmdInput.addEventListener("blur", () => {
-      metaViewport.setAttribute("content", "width=device-width, initial-scale=1");
-      isPaused = false;
-    });
-
-    cmdInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") {
-        const val = cmdInput.value.trim();
-        if (val.startsWith("/")) {
-          parseCommand(val);
-        }
-        cmdInput.value = "";
-      }
-    });
-
-    updateStatus();
-    checkBanStatus();
     loop();
   </script>
 </body>
