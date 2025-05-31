@@ -43,6 +43,16 @@
       font-size: 48px;
       margin-top: 20px;
     }
+    #resetButton {
+      margin-top: 20px;
+      padding: 10px 30px;
+      font-size: 20px;
+      background: #fff;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -53,6 +63,7 @@
   <div>You have been banned!</div>
   <div id="banCountdown">01:00</div>
 </div>
+<button id="resetButton">Reset</button>
 
 <script>
 (() => {
@@ -61,6 +72,7 @@
   const input = document.getElementById('commandInput');
   const overlay = document.getElementById('bannedOverlay');
   const countdown = document.getElementById('banCountdown');
+  const resetBtn = document.getElementById('resetButton');
 
   function resize() {
     canvas.width = window.innerWidth;
@@ -83,10 +95,14 @@
 
   function showBan() {
     overlay.style.display = 'flex';
+    resetBtn.style.display = 'block';
   }
+
   function hideBan() {
     overlay.style.display = 'none';
+    resetBtn.style.display = 'none';
   }
+
   function updateCountdown() {
     let now = Date.now();
     let diff = bannedUntil - now;
@@ -188,16 +204,24 @@
         alert('Ghost mode OFF');
       } else if (cmd.startsWith('/speed ')) {
         const n = parseInt(cmd.split(' ')[1]);
-        if (!isNaN(n) && n >= 1 && n <= 10) {
+        if (!isNaN(n) && n >= 1 && n <= 3) {
           speed = n;
           alert(`Speed set to ${speed}`);
+        } else {
+          alert('Speed chỉ được phép từ 1 đến 3');
         }
       }
 
-      // Kiểm tra xem đang ghost hoặc speed cao mà không bật antiban
       if (!antiban && (ghost || speed > 1)) {
         banPlayer();
       }
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    if (bannedUntil <= Date.now()) {
+      resetGame();
+      gameLoop();
     }
   });
 
