@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Flappy Birch</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
     html, body {
       margin: 0;
@@ -74,7 +75,7 @@
   <canvas id="gameCanvas"></canvas>
 
   <div id="console">
-    <div>> <input id="cmdInput" type="text" placeholder="/command..." /></div>
+    <div>> <input id="cmdInput" type="text" placeholder="/command..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" /></div>
     <div class="result" id="cmdResult"></div>
   </div>
 
@@ -117,7 +118,7 @@
     let isPaused = false;
 
     let birchImage = new Image();
-    birchImage.src = "birch.png"; // Optional: add a skin
+    birchImage.src = "birch.png"; // Optional skin image
     birchImage.onerror = () => { birchImage = null; };
 
     function updateStatus() {
@@ -233,6 +234,7 @@
 
     const cmdInput = document.getElementById("cmdInput");
     const cmdResult = document.getElementById("cmdResult");
+    const metaViewport = document.querySelector('meta[name=viewport]');
 
     function parseCommand(input) {
       const args = input.trim().toLowerCase().split(" ");
@@ -288,11 +290,21 @@
 
     cmdInput.addEventListener("focus", () => {
       isPaused = true;
+      // Fix iOS zoom
+      metaViewport.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no");
     });
 
-    cmdInput.addEventListener("keydown", (e) => {
+    cmdInput.addEventListener("blur", () => {
+      metaViewport.setAttribute("content", "width=device-width, initial-scale=1");
+      isPaused = false;
+    });
+
+    cmdInput.addEventListener("keydown", e => {
       if (e.key === "Enter") {
-        parseCommand(cmdInput.value);
+        const val = cmdInput.value.trim();
+        if (val.startsWith("/")) {
+          parseCommand(val);
+        }
         cmdInput.value = "";
       }
     });
