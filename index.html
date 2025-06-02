@@ -3,45 +3,102 @@
 <head>
   <meta charset="UTF-8">
   <title>Head Ball</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
       background: #87CEEB;
+      height: 100%;
     }
     canvas {
       display: block;
       background: #6ab04c;
+      width: 100vw;
+      height: 100vh;
     }
-    #shootBtn {
+    #shootBtn, #leftBtn, #rightBtn {
       position: absolute;
       bottom: 20px;
-      right: 20px;
       padding: 15px 25px;
-      font-size: 20px;
-      background: #e74c3c;
-      color: white;
+      font-size: 24px;
       border: none;
       border-radius: 10px;
-      cursor: pointer;
       z-index: 10;
+      cursor: pointer;
+    }
+    #shootBtn {
+      right: 20px;
+      background: #e74c3c;
+      color: white;
+    }
+    #leftBtn {
+      left: 20px;
+      background: #2980b9;
+      color: white;
+    }
+    #rightBtn {
+      left: 100px;
+      background: #2980b9;
+      color: white;
+    }
+    #rotateNotice {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      text-align: center;
+      display: none;
     }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <canvas id="gameCanvas"></canvas>
+
   <button id="shootBtn">Shoot</button>
+  <button id="leftBtn">&lt;</button>
+  <button id="rightBtn">&gt;</button>
+  <div id="rotateNotice">⚠️ Vui lòng xoay ngang màn hình để chơi game</div>
 
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    const groundY = canvas.height - 50;
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      checkOrientation();
+    });
+
+    function checkOrientation() {
+      const notice = document.getElementById('rotateNotice');
+      if (window.innerHeight > window.innerWidth) {
+        notice.style.display = 'flex';
+      } else {
+        notice.style.display = 'none';
+      }
+    }
+
+    resizeCanvas();
+    checkOrientation();
+
+    const groundY = () => canvas.height - 50;
 
     let player = {
       x: 100,
-      y: groundY - 80,
+      y: groundY() - 80,
       width: 30,
       height: 60,
       vx: 0,
@@ -50,14 +107,14 @@
     };
 
     let opponent = {
-      x: 600,
-      y: groundY - 80,
+      x: canvas.width - 200,
+      y: groundY() - 80,
       width: 30,
       height: 60
     };
 
     let ball = {
-      x: 250,
+      x: canvas.width / 2,
       y: 100,
       radius: 15,
       vx: 2,
@@ -71,9 +128,16 @@
 
     let keys = {};
 
+    // Bàn phím
     document.addEventListener('keydown', e => keys[e.key] = true);
     document.addEventListener('keyup', e => keys[e.key] = false);
+
+    // Nút bấm
     document.getElementById('shootBtn').addEventListener('click', () => shoot());
+    document.getElementById('leftBtn').addEventListener('touchstart', () => keys['ArrowLeft'] = true);
+    document.getElementById('leftBtn').addEventListener('touchend', () => keys['ArrowLeft'] = false);
+    document.getElementById('rightBtn').addEventListener('touchstart', () => keys['ArrowRight'] = true);
+    document.getElementById('rightBtn').addEventListener('touchend', () => keys['ArrowRight'] = false);
 
     function shoot() {
       const dx = ball.x - player.x;
@@ -85,7 +149,7 @@
       }
     }
 
-    function update() {
+    window.update = function update() {
       // Di chuyển player
       if (keys['ArrowLeft']) player.vx = -4;
       else if (keys['ArrowRight']) player.vx = 4;
@@ -100,13 +164,13 @@
       player.vy += gravity;
       player.y += player.vy;
 
-      if (player.y + player.height >= groundY) {
-        player.y = groundY - player.height;
+      if (player.y + player.height >= groundY()) {
+        player.y = groundY() - player.height;
         player.vy = 0;
         player.onGround = true;
       }
 
-      // Bóng rơi và lăn
+      // Bóng
       ball.vy += gravity;
       ball.x += ball.vx;
       ball.y += ball.vy;
@@ -114,8 +178,8 @@
       ball.vx *= friction;
       ball.vy *= friction;
 
-      if (ball.y + ball.radius >= groundY) {
-        ball.y = groundY - ball.radius;
+      if (ball.y + ball.radius >= groundY()) {
+        ball.y = groundY() - ball.radius;
         ball.vy *= -0.7;
       }
 
@@ -125,7 +189,7 @@
         if (ball.x + ball.radius >= canvas.width) ball.x = canvas.width - ball.radius;
       }
 
-      // Va chạm với player
+      // Va chạm player
       let dx = ball.x - (player.x + player.width / 2);
       let dy = ball.y - (player.y + 20);
       let dist = Math.sqrt(dx*dx + dy*dy);
@@ -133,21 +197,19 @@
         ball.vx += dx / dist * 3;
         ball.vy += dy / dist * 3;
       }
-
-      // Không xử lý va chạm với opponent để có thể hack xuyên qua bằng bookmarklet
-    }
+    };
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Sân
       ctx.fillStyle = '#27ae60';
-      ctx.fillRect(0, groundY, canvas.width, 50);
+      ctx.fillRect(0, groundY(), canvas.width, 50);
 
       // Cầu môn
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, groundY - 80, 10, 80);
-      ctx.fillRect(canvas.width - 10, groundY - 80, 10, 80);
+      ctx.fillRect(0, groundY() - 80, 10, 80);
+      ctx.fillRect(canvas.width - 10, groundY() - 80, 10, 80);
 
       // Player
       ctx.fillStyle = '#f1c40f';
@@ -159,10 +221,10 @@
 
       // Opponent
       ctx.fillStyle = '#e74c3c';
-      ctx.fillRect(opponent.x, opponent.y + 40, opponent.width, 20); // chân
-      ctx.fillRect(opponent.x + 5, opponent.y + 20, 20, 20);          // thân
+      ctx.fillRect(opponent.x, opponent.y + 40, opponent.width, 20);
+      ctx.fillRect(opponent.x + 5, opponent.y + 20, 20, 20);
       ctx.beginPath();
-      ctx.arc(opponent.x + opponent.width / 2, opponent.y + 10, 10, 0, Math.PI * 2); // đầu
+      ctx.arc(opponent.x + opponent.width / 2, opponent.y + 10, 10, 0, Math.PI * 2);
       ctx.fill();
 
       // Bóng
@@ -173,7 +235,7 @@
     }
 
     function gameLoop() {
-      update();
+      window.update();
       draw();
       requestAnimationFrame(gameLoop);
     }
