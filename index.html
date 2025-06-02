@@ -27,7 +27,6 @@
       cursor: pointer;
       user-select: none;
       color: white;
-      user-select:none;
       -webkit-user-select:none;
       -moz-user-select:none;
       -ms-user-select:none;
@@ -100,9 +99,9 @@
 
   const groundHeight = 50;
   const groundY = () => canvas.height - groundHeight;
-  const cameraOffsetY = 80; // camera dịch xuống
+  const cameraOffsetY = 200; // Dịch camera xuống thấp hơn để thấy chân + sân rộng
 
-  // Player object
+  // Player chính
   let player = {
     x: 100,
     y: groundY() - 80,
@@ -111,17 +110,40 @@
     vx: 0,
     vy: 0,
     onGround: true,
-    facing: 1, // 1: phải, -1: trái
+    facing: 1,
   };
 
-  // Đối thủ đứng yên đơn giản
-  let opponent = {
-    x: canvas.width - 200,
+  // Đồng đội (bot)
+  let teammate = {
+    x: 250,
     y: groundY() - 80,
     width: 30,
     height: 60,
-    facing: -1
+    facing: 1,
+    color: "#2980b9",
   };
+
+  // 2 đối thủ (enemy)
+  let opponents = [
+    {
+      x: canvas.width - 250,
+      y: groundY() - 80,
+      width: 30,
+      height: 60,
+      facing: -1,
+      color: "#e74c3c",
+      vx: 1.5
+    },
+    {
+      x: canvas.width - 150,
+      y: groundY() - 80,
+      width: 30,
+      height: 60,
+      facing: -1,
+      color: "#e74c3c",
+      vx: 1.2
+    }
+  ];
 
   // Bóng
   let ball = {
@@ -135,11 +157,10 @@
   const gravity = 0.5;
   const friction = 0.9;
   const jumpPower = -12;
-  const shootPower = 15; // lực sút mạnh hơn, bóng bay lên rõ
+  const shootPower = 15;
 
   let keys = {};
 
-  // Bàn phím
   document.addEventListener("keydown", e => {
     if(["ArrowLeft", "ArrowRight", "ArrowUp"].includes(e.key)){
       keys[e.key] = true;
@@ -153,11 +174,9 @@
     }
   });
 
-  // Nút bấm
   document.getElementById("shootBtn").addEventListener("click", () => shoot());
   document.getElementById("jumpBtn").addEventListener("click", () => jump());
 
-  // Touch events cho di chuyển trái phải
   const leftBtn = document.getElementById("leftBtn");
   leftBtn.addEventListener("touchstart", () => keys["ArrowLeft"] = true);
   leftBtn.addEventListener("touchend", () => keys["ArrowLeft"] = false);
@@ -166,7 +185,6 @@
   rightBtn.addEventListener("touchstart", () => keys["ArrowRight"] = true);
   rightBtn.addEventListener("touchend", () => keys["ArrowRight"] = false);
 
-  // Hàm nhảy
   function jump() {
     if(player.onGround){
       player.vy = jumpPower;
@@ -174,21 +192,18 @@
     }
   }
 
-  // Hàm sút bóng
   function shoot() {
-    // Kiểm tra khoảng cách player và bóng
     const dx = ball.x - (player.x + player.width/2);
     const dy = ball.y - (player.y + 20);
     const dist = Math.sqrt(dx*dx + dy*dy);
     if(dist < ball.radius + 50){
-      // Bóng bay theo hướng player đang quay (facing)
       ball.vx = shootPower * player.facing;
-      ball.vy = -shootPower; // bóng bay lên mạnh
+      ball.vy = -shootPower;
     }
   }
 
   function update() {
-    // Di chuyển player
+    // Player di chuyển
     if(keys["ArrowLeft"]){
       player.vx = -4;
       player.facing = -1;
@@ -198,7 +213,6 @@
     } else {
       player.vx = 0;
     }
-
     if(keys["ArrowUp"] && player.onGround){
       jump();
     }
@@ -207,34 +221,47 @@
     player.vy += gravity;
     player.y += player.vy;
 
-    // Giới hạn player không ra ngoài sân
     if(player.x < 0) player.x = 0;
     if(player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-    // Va chạm với mặt đất
     if(player.y + player.height >= groundY()){
       player.y = groundY() - player.height;
       player.vy = 0;
       player.onGround = true;
     }
 
+    // Cập nhật đồng đội (bot) đơn giản - di chuyển qua lại nhỏ
+    teammate.x += 1.2 * Math.sin(Date.now() / 1000);
+    if(teammate.x < 50) teammate.x = 50;
+    if(teammate.x + teammate.width > canvas.width / 2) teammate.x = canvas.width / 2 - teammate.width;
+
+    // Cập nhật đối thủ di chuyển qua lại (đơn giản)
+    opponents.forEach(op => {
+      op.x += op.vx;
+      if(op.x < canvas.width / 2) {
+        op.vx = Math.abs(op.vx);
+        op.facing = 1;
+      }
+      if(op.x + op.width > canvas.width - 50){
+        op.vx = -Math.abs(op.vx);
+        op.facing = -1;
+      }
+    });
+
     // Bóng vật lý
     ball.vy += gravity;
     ball.x += ball.vx;
     ball.y += ball.vy;
 
-    // Ma sát
     ball.vx *= friction;
     ball.vy *= friction;
 
-    // Va chạm bóng với mặt đất
     if(ball.y + ball.radius >= groundY()){
       ball.y = groundY() - ball.radius;
       ball.vy *= -0.7;
       if(Math.abs(ball.vy) < 1) ball.vy = 0;
     }
 
-    // Va chạm bóng với tường sân
     if(ball.x - ball.radius <= 0){
       ball.x = ball.radius;
       ball.vx *= -0.7;
@@ -244,22 +271,53 @@
       ball.vx *= -0.7;
     }
 
-    // Va chạm bóng với player (đơn giản)
+    // Va chạm bóng với player chính
     let dx = ball.x - (player.x + player.width / 2);
     let dy = ball.y - (player.y + 20);
     let dist = Math.sqrt(dx * dx + dy * dy);
     if(dist < ball.radius + 20){
-      // Bóng bật ra theo hướng va chạm
       let angle = Math.atan2(dy, dx);
       ball.vx = Math.cos(angle) * shootPower;
       ball.vy = Math.sin(angle) * shootPower;
     }
+
+    // Va chạm bóng với đồng đội (bot)
+    dx = ball.x - (teammate.x + teammate.width / 2);
+    dy = ball.y - (teammate.y + 20);
+    dist = Math.sqrt(dx * dx + dy * dy);
+    if(dist < ball.radius + 20){
+      let angle = Math.atan2(dy, dx);
+      ball.vx = Math.cos(angle) * shootPower * 0.7;
+      ball.vy = Math.sin(angle) * shootPower * 0.7;
+    }
+
+    // Va chạm bóng với các đối thủ
+    opponents.forEach(op => {
+      dx = ball.x - (op.x + op.width / 2);
+      dy = ball.y - (op.y + 20);
+      dist = Math.sqrt(dx * dx + dy * dy);
+      if(dist < ball.radius + 20){
+        let angle = Math.atan2(dy, dx);
+        ball.vx = Math.cos(angle) * shootPower * 0.7;
+        ball.vy = Math.sin(angle) * shootPower * 0.7;
+      }
+    });
+  }
+
+  function drawPlayer(p, color="#f1c40f") {
+    ctx.fillStyle = color;
+    // chân
+    ctx.fillRect(p.x, p.y + 40, p.width, 20);
+    // thân
+    ctx.fillRect(p.x + 5, p.y + 20, 20, 20);
+    // đầu
+    ctx.beginPath();
+    ctx.arc(p.x + p.width / 2, p.y + 10, 10, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Dịch camera xuống để thấy chân player và cầu môn
     ctx.save();
     ctx.translate(0, cameraOffsetY);
 
@@ -272,23 +330,16 @@
     ctx.fillRect(0, groundY() - 80 - cameraOffsetY, 10, 80);
     ctx.fillRect(canvas.width - 10, groundY() - 80 - cameraOffsetY, 10, 80);
 
-    // Player chân
-    ctx.fillStyle = "#f1c40f";
-    ctx.fillRect(player.x, player.y + 40, player.width, 20);
-    // Thân player
-    ctx.fillRect(player.x + 5, player.y + 20, 20, 20);
-    // Đầu player (circle)
-    ctx.beginPath();
-    ctx.arc(player.x + player.width / 2, player.y + 10, 10, 0, Math.PI * 2);
-    ctx.fill();
+    // Vẽ player chính
+    drawPlayer(player, "#f1c40f");
 
-    // Đối thủ (đơn giản, màu đỏ)
-    ctx.fillStyle = "#e74c3c";
-    ctx.fillRect(opponent.x, opponent.y + 40, opponent.width, 20);
-    ctx.fillRect(opponent.x + 5, opponent.y + 20, 20, 20);
-    ctx.beginPath();
-    ctx.arc(opponent.x + opponent.width / 2, opponent.y + 10, 10, 0, Math.PI * 2);
-    ctx.fill();
+    // Vẽ đồng đội (màu xanh)
+    drawPlayer(teammate, teammate.color);
+
+    // Vẽ đối thủ
+    opponents.forEach(op => {
+      drawPlayer(op, op.color);
+    });
 
     // Bóng
     ctx.fillStyle = "#ffffff";
