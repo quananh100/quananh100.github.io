@@ -1,189 +1,181 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>Nhặt bóng vào 2 rổ</title>
+  <meta charset="UTF-8">
+  <title>Head Ball Game</title>
   <style>
     html, body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background-color: #000;
+      background: #87CEEB;
     }
     canvas {
       display: block;
-      background-color: #fff;
+      background: #6ab04c;
     }
-    #ui {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 10;
-      color: white;
+    #shootBtn {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      padding: 15px 25px;
       font-size: 20px;
-      font-family: sans-serif;
-    }
-    #buttons {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      z-index: 10;
-    }
-    .icon-btn {
-      background: none;
+      background: #e74c3c;
+      color: white;
       border: none;
+      border-radius: 10px;
       cursor: pointer;
-      margin-left: 10px;
-    }
-    .icon-btn img {
-      width: 40px;
-      height: 40px;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
-  <div id="ui">⏱️ Thời gian: <span id="timer">120</span> | 🎯 Điểm: <span id="score">0</span></div>
-  <div id="buttons">
-    <button class="icon-btn" id="pauseBtn" title="Dừng">⏸️</button>
-    <button class="icon-btn" id="resetBtn" title="Chơi lại">
-      <img src="https://img.icons8.com/ios-filled/50/ffffff/restart--v1.png" alt="Reset" />
-    </button>
-  </div>
-  <canvas id="gameCanvas"></canvas>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+  <button id="shootBtn">Shoot</button>
+
   <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-    let basket = { x: canvas.width / 2 - 50, y: 50, width: 100, height: 20 };
-    let basket2 = { x: canvas.width / 2 + 100, y: 50, width: 100, height: 20 };
-    let bot = { x: 100, width: 100, height: 20 };
+    // Sân
+    const groundY = canvas.height - 50;
 
-    let balls = [];
-    const ballCount = 5;
-    const ballRadius = 10;
-    for (let i = 0; i < ballCount; i++) {
-      balls.push({ x: Math.random() * canvas.width, y: -i * 100, radius: ballRadius, speed: 3 });
-    }
+    // Cầu thủ
+    let player = {
+      x: 100,
+      y: groundY - 80,
+      width: 30,
+      height: 60,
+      vx: 0,
+      vy: 0,
+      onGround: false
+    };
 
-    let score = 0;
-    let timeLeft = 120;
-    let isPaused = false;
-    let timerInterval;
+    // Bóng
+    let ball = {
+      x: 200,
+      y: 100,
+      radius: 15,
+      vx: 2,
+      vy: 0
+    };
 
-    const keys = {};
-    document.addEventListener("keydown", e => keys[e.key] = true);
-    document.addEventListener("keyup", e => keys[e.key] = false);
+    // Vật lý
+    const gravity = 0.5;
+    const friction = 0.9;
+    const jumpPower = -10;
+    const shootPower = 8;
 
-    function resetGame() {
-      score = 0;
-      timeLeft = 120;
-      for (let i = 0; i < ballCount; i++) {
-        balls[i].x = Math.random() * canvas.width;
-        balls[i].y = -i * 100;
+    let keys = {};
+
+    // Sự kiện phím
+    document.addEventListener('keydown', e => keys[e.key] = true);
+    document.addEventListener('keyup', e => keys[e.key] = false);
+    document.getElementById('shootBtn').addEventListener('click', () => {
+      shoot();
+    });
+
+    function shoot() {
+      // Kiểm tra khoảng cách gần để sút
+      const dx = ball.x - player.x;
+      const dy = ball.y - (player.y + 10);
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < 60) {
+        // Hướng sút
+        ball.vx += dx / dist * shootPower;
+        ball.vy += dy / dist * shootPower;
       }
-      startTimer();
-      loop();
-    }
-
-    function startTimer() {
-      clearInterval(timerInterval);
-      timerInterval = setInterval(() => {
-        if (!isPaused) {
-          timeLeft--;
-          document.getElementById("timer").textContent = timeLeft;
-          if (timeLeft <= 0) {
-            clearInterval(timerInterval);
-            alert("⏰ Hết giờ! Bạn ghi được " + score + " điểm!");
-          }
-        }
-      }, 1000);
-    }
-
-    function loop() {
-      if (isPaused) return;
-      update();
-      draw();
-      requestAnimationFrame(loop);
     }
 
     function update() {
-      if (keys["ArrowLeft"]) bot.x -= 5;
-      if (keys["ArrowRight"]) bot.x += 5;
-      bot.x = Math.max(0, Math.min(canvas.width - bot.width, bot.x));
+      // Di chuyển cầu thủ
+      if (keys['ArrowLeft']) player.vx = -4;
+      else if (keys['ArrowRight']) player.vx = 4;
+      else player.vx = 0;
 
-      // bot AI auto theo bóng gần nhất
-      let targetBall = balls.reduce((a, b) => (a.y > b.y ? a : b));
-      if (targetBall.x < basket.x + basket.width / 2) basket.x -= 4;
-      if (targetBall.x > basket.x + basket.width / 2) basket.x += 4;
-      basket.x = Math.max(0, Math.min(canvas.width - basket.width, basket.x));
-
-      basket2.x = basket.x + 200;
-
-      for (let ball of balls) {
-        ball.y += ball.speed;
-        if (checkCatch(ball, basket) || checkCatch(ball, basket2)) {
-          score++;
-          document.getElementById("score").textContent = score;
-          resetBall(ball);
-        } else if (checkCatch(ball, { x: bot.x, y: canvas.height - 40, width: bot.width, height: bot.height })) {
-          resetBall(ball);
-        } else if (ball.y > canvas.height) {
-          resetBall(ball);
-        }
+      if (keys['ArrowUp'] && player.onGround) {
+        player.vy = jumpPower;
+        player.onGround = false;
       }
-    }
 
-    function resetBall(ball) {
-      ball.x = Math.random() * (canvas.width - 2 * ballRadius) + ballRadius;
-      ball.y = -Math.random() * 200;
-    }
+      player.x += player.vx;
+      player.vy += gravity;
+      player.y += player.vy;
 
-    function checkCatch(ball, box) {
-      return (
-        ball.y + ball.radius >= box.y &&
-        ball.y - ball.radius <= box.y + box.height &&
-        ball.x >= box.x &&
-        ball.x <= box.x + box.width
-      );
+      if (player.y + player.height >= groundY) {
+        player.y = groundY - player.height;
+        player.vy = 0;
+        player.onGround = true;
+      }
+
+      // Bóng
+      ball.vy += gravity;
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      ball.vx *= friction;
+      ball.vy *= friction;
+
+      // Va chạm đất
+      if (ball.y + ball.radius >= groundY) {
+        ball.y = groundY - ball.radius;
+        ball.vy *= -0.7;
+      }
+
+      // Va chạm biên
+      if (ball.x - ball.radius <= 0 || ball.x + ball.radius >= canvas.width) {
+        ball.vx *= -1;
+        if (ball.x - ball.radius <= 0) ball.x = ball.radius;
+        if (ball.x + ball.radius >= canvas.width) ball.x = canvas.width - ball.radius;
+      }
+
+      // Va chạm cầu thủ (đơn giản)
+      let dx = ball.x - (player.x + player.width / 2);
+      let dy = ball.y - (player.y + 20);
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < ball.radius + 20) {
+        ball.vx += dx / dist * 3;
+        ball.vy += dy / dist * 3;
+      }
     }
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // rổ AI
-      ctx.fillStyle = "blue";
-      ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
-      ctx.fillRect(basket2.x, basket2.y, basket2.width, basket2.height);
+      // Sân
+      ctx.fillStyle = '#27ae60';
+      ctx.fillRect(0, groundY, canvas.width, 50);
 
-      // bot người chơi
-      ctx.fillStyle = "green";
-      ctx.fillRect(bot.x, canvas.height - 40, bot.width, bot.height);
+      // Cầu môn trái
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, groundY - 80, 10, 80);
 
-      // bóng
-      for (let ball of balls) {
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "red";
-        ctx.fill();
-        ctx.closePath();
-      }
+      // Cầu môn phải
+      ctx.fillRect(canvas.width - 10, groundY - 80, 10, 80);
+
+      // Vẽ cầu thủ (đầu + chân)
+      ctx.fillStyle = '#f1c40f';
+      // Chân
+      ctx.fillRect(player.x, player.y + 30, player.width, 30);
+      // Đầu
+      ctx.beginPath();
+      ctx.arc(player.x + player.width / 2, player.y + 15, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bóng
+      ctx.beginPath();
+      ctx.fillStyle = '#ffffff';
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    document.getElementById("pauseBtn").onclick = () => {
-      isPaused = !isPaused;
-      if (!isPaused) loop();
-    };
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
 
-    document.getElementById("resetBtn").onclick = () => {
-      location.reload();
-    };
-
-    window.onload = () => {
-      startTimer();
-      loop();
-    };
+    gameLoop();
   </script>
 </body>
 </html>
