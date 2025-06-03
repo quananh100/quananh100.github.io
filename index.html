@@ -1,358 +1,159 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
-  <title>Head Ball</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta charset="UTF-8">
+  <title>Head Ball - Gôn gần người chơi</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
     html, body {
-      margin: 0; padding: 0; overflow: hidden;
-      background: #87ceeb;
-      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #6ab04c;
     }
     canvas {
       display: block;
-      background: #6ab04c;
-      width: 100vw;
-      height: 100vh;
     }
     button {
       position: absolute;
-      bottom: 20px;
-      padding: 15px 25px;
       font-size: 24px;
-      border: none;
-      border-radius: 10px;
+      padding: 12px 24px;
       z-index: 10;
-      cursor: pointer;
-      user-select: none;
+      border: none;
+      border-radius: 8px;
+      background-color: #2980b9;
       color: white;
-      -webkit-user-select:none;
-      -moz-user-select:none;
-      -ms-user-select:none;
     }
-    #shootBtn {
-      right: 20px;
-      background: #e74c3c;
-    }
-    #jumpBtn {
-      right: 120px;
-      background: #f39c12;
-    }
-    #leftBtn {
-      left: 20px;
-      background: #2980b9;
-    }
-    #rightBtn {
-      left: 100px;
-      background: #2980b9;
-    }
-    #rotateNotice {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw; height: 100vh;
-      background: rgba(0,0,0,0.8);
-      color: white;
-      font-size: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      text-align: center;
-      display: none;
-    }
+    #leftBtn { bottom: 20px; left: 20px; }
+    #rightBtn { bottom: 20px; left: 120px; }
+    #jumpBtn { bottom: 20px; right: 120px; background-color: #f39c12; }
+    #shootBtn { bottom: 20px; right: 20px; background-color: #e74c3c; }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
 
-  <button id="shootBtn">Shoot</button>
-  <button id="jumpBtn">Jump</button>
-  <button id="leftBtn">&lt;</button>
-  <button id="rightBtn">&gt;</button>
-  <div id="rotateNotice">⚠️ Vui lòng xoay ngang màn hình để chơi game</div>
+<canvas id="gameCanvas"></canvas>
+
+<!-- Nút điều khiển -->
+<button id="leftBtn">←</button>
+<button id="rightBtn">→</button>
+<button id="jumpBtn">Jump</button>
+<button id="shootBtn">Shoot</button>
 
 <script>
   const canvas = document.getElementById("gameCanvas");
   const ctx = canvas.getContext("2d");
 
+  // Kích thước màn hình
   function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
   }
-  window.addEventListener("resize", () => {
-    resizeCanvas();
-    checkOrientation();
-  });
-
-  function checkOrientation() {
-    const notice = document.getElementById("rotateNotice");
-    if(window.innerHeight > window.innerWidth){
-      notice.style.display = "flex";
-    } else {
-      notice.style.display = "none";
-    }
-  }
-
   resizeCanvas();
-  checkOrientation();
+  window.addEventListener("resize", resizeCanvas);
 
-  const groundHeight = 50;
-  const groundY = () => canvas.height - groundHeight;
-  const cameraOffsetY = 200; // Dịch camera xuống thấp hơn để thấy chân + sân rộng
+  // Vị trí mặt đất
+  const groundY = canvas.height - 100;
 
-  // Player chính
-  let player = {
-    x: 100,
-    y: groundY() - 100,
-    width: 30,
+  // Người chơi
+  const player = {
+    x: canvas.width / 2 - 25,
+    y: groundY - 80,
+    width: 50,
     height: 80,
     vx: 0,
     vy: 0,
-    onGround: true,
-    facing: 1,
+    onGround: true
   };
-
-  // Đồng đội (bot)
-  let teammate = {
-    x: 250,
-    y: groundY() - 100,
-    width: 30,
-    height: 80,
-    facing: 1,
-    color: "#2980b9",
-  };
-
-  // 2 đối thủ (enemy)
-  let opponents = [
-    {
-      x: canvas.width - 250,
-      y: groundY() - 100,
-      width: 30,
-      height: 80,
-      facing: -1,
-      color: "#e74c3c",
-      vx: 1.5
-    },
-    {
-      x: canvas.width - 150,
-      y: groundY() - 100,
-      width: 30,
-      height: 80,
-      facing: -1,
-      color: "#e74c3c",
-      vx: 1.2
-    }
-  ];
 
   // Bóng
-  let ball = {
+  const ball = {
     x: canvas.width / 2,
-    y: 100,
+    y: groundY - 140,
     radius: 15,
     vx: 0,
     vy: 0
   };
 
-  const gravity = 0.5;
+  // Cầu môn gần đầu người chơi
+  const goal = {
+    x: canvas.width / 2 - 60,
+    y: groundY - 160,
+    width: 120,
+    height: 10
+  };
+
+  // Vật lý
+  const gravity = 0.6;
   const friction = 0.9;
-  const jumpPower = -12;
-  const shootPower = 15;
 
-  let keys = {};
-
-  document.addEventListener("keydown", e => {
-    if(["ArrowLeft", "ArrowRight", "ArrowUp"].includes(e.key)){
-      keys[e.key] = true;
-      e.preventDefault();
-    }
-  });
-  document.addEventListener("keyup", e => {
-    if(["ArrowLeft", "ArrowRight", "ArrowUp"].includes(e.key)){
-      keys[e.key] = false;
-      e.preventDefault();
-    }
-  });
-
-  document.getElementById("shootBtn").addEventListener("click", () => shoot());
-  document.getElementById("jumpBtn").addEventListener("click", () => jump());
-
-  const leftBtn = document.getElementById("leftBtn");
-  leftBtn.addEventListener("touchstart", () => keys["ArrowLeft"] = true);
-  leftBtn.addEventListener("touchend", () => keys["ArrowLeft"] = false);
-
-  const rightBtn = document.getElementById("rightBtn");
-  rightBtn.addEventListener("touchstart", () => keys["ArrowRight"] = true);
-  rightBtn.addEventListener("touchend", () => keys["ArrowRight"] = false);
-
-  function jump() {
-    if(player.onGround){
-      player.vy = jumpPower;
-      player.onGround = false;
-    }
-  }
-
-  function shoot() {
-    const dx = ball.x - (player.x + player.width/2);
-    const dy = ball.y - (player.y + 20);
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if(dist < ball.radius + 50){
-      ball.vx = shootPower * player.facing;
-      ball.vy = -shootPower;
-    }
-  }
-
+  // Cập nhật vị trí
   function update() {
-    // Player di chuyển
-    if(keys["ArrowLeft"]){
-      player.vx = -4;
-      player.facing = -1;
-    } else if(keys["ArrowRight"]){
-      player.vx = 4;
-      player.facing = 1;
-    } else {
-      player.vx = 0;
-    }
-    if(keys["ArrowUp"] && player.onGround){
-      jump();
-    }
-
-    player.x += player.vx;
+    // Cập nhật người chơi
     player.vy += gravity;
     player.y += player.vy;
+    player.x += player.vx;
+    player.vx *= friction;
 
-    if(player.x < 0) player.x = 0;
-    if(player.x + player.width > canvas.width) player.x = canvas.width - player.width;
-
-    if(player.y + player.height >= groundY()){
-      player.y = groundY() - player.height;
+    // Va chạm với mặt đất
+    if (player.y + player.height > groundY) {
+      player.y = groundY - player.height;
       player.vy = 0;
       player.onGround = true;
     }
 
-    // Cập nhật đồng đội (bot) đơn giản - di chuyển qua lại nhỏ
-    teammate.x += 1.2 * Math.sin(Date.now() / 1000);
-    if(teammate.x < 50) teammate.x = 50;
-    if(teammate.x + teammate.width > canvas.width / 2) teammate.x = canvas.width / 2 - teammate.width;
-
-    // Cập nhật đối thủ di chuyển qua lại (đơn giản)
-    opponents.forEach(op => {
-      op.x += op.vx;
-      if(op.x < canvas.width / 2) {
-        op.vx = Math.abs(op.vx);
-        op.facing = 1;
-      }
-      if(op.x + op.width > canvas.width - 50){
-        op.vx = -Math.abs(op.vx);
-        op.facing = -1;
-      }
-    });
-
-    // Bóng vật lý
+    // Cập nhật bóng
     ball.vy += gravity;
     ball.x += ball.vx;
     ball.y += ball.vy;
 
-    ball.vx *= friction;
-    ball.vy *= friction;
-
-    if(ball.y + ball.radius >= groundY()){
-      ball.y = groundY() - ball.radius;
-      ball.vy *= -0.7;
-      if(Math.abs(ball.vy) < 1) ball.vy = 0;
+    // Va chạm bóng với mặt đất
+    if (ball.y + ball.radius > groundY) {
+      ball.y = groundY - ball.radius;
+      ball.vy *= -0.6;
     }
 
-    if(ball.x - ball.radius <= 0){
-      ball.x = ball.radius;
-      ball.vx *= -0.7;
-    }
-    if(ball.x + ball.radius >= canvas.width){
-      ball.x = canvas.width - ball.radius;
-      ball.vx *= -0.7;
-    }
-
-    // Va chạm bóng với player chính
-    let dx = ball.x - (player.x + player.width / 2);
-    let dy = ball.y - (player.y + 20);
+    // Va chạm đơn giản giữa bóng và người chơi
+    let dx = (player.x + player.width / 2) - ball.x;
+    let dy = (player.y + 20) - ball.y;
     let dist = Math.sqrt(dx * dx + dy * dy);
-    if(dist < ball.radius + 20){
-      let angle = Math.atan2(dy, dx);
-      ball.vx = Math.cos(angle) * shootPower;
-      ball.vy = Math.sin(angle) * shootPower - 5;
-    }
 
-    // Va chạm bóng với teammate
-    dx = ball.x - (teammate.x + teammate.width / 2);
-    dy = ball.y - (teammate.y + 20);
-    dist = Math.sqrt(dx * dx + dy * dy);
-    if(dist < ball.radius + 20){
+    if (dist < 50) {
       let angle = Math.atan2(dy, dx);
-      ball.vx = Math.cos(angle) * shootPower * 0.8;
-      ball.vy = Math.sin(angle) * shootPower * 0.8 - 5;
+      ball.vx = -Math.cos(angle) * 5;
+      ball.vy = -Math.abs(Math.sin(angle)) * 8;
     }
-
-    // Va chạm bóng với opponents
-    opponents.forEach(op => {
-      dx = ball.x - (op.x + op.width / 2);
-      dy = ball.y - (op.y + 20);
-      dist = Math.sqrt(dx * dx + dy * dy);
-      if(dist < ball.radius + 20){
-        let angle = Math.atan2(dy, dx);
-        ball.vx = Math.cos(angle) * shootPower * 0.9 * -op.facing;
-        ball.vy = Math.sin(angle) * shootPower * 0.9 - 5;
-      }
-    });
   }
 
-  function drawPlayer(p, color="#f1c40f") {
-    ctx.fillStyle = color;
-    // chân (to hơn)
-    ctx.fillRect(p.x, p.y + 45, p.width + 10, 25);
-    // thân (to hơn)
-    ctx.fillRect(p.x + 7, p.y + 20, 26, 30);
-    // đầu (to hơn và tròn)
-    ctx.beginPath();
-    ctx.arc(p.x + (p.width + 10) / 2, p.y + 10, 18, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
+  // Vẽ sân, cầu môn, bóng và người chơi
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Sân cỏ
-    ctx.fillStyle = "#6ab04c";
-    ctx.fillRect(0, groundY() - cameraOffsetY, canvas.width, groundHeight);
+    // Vẽ mặt đất
+    ctx.fillStyle = "#27ae60";
+    ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
 
-    // Đường viền sân
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 5;
-    ctx.strokeRect(0, groundY() - cameraOffsetY - 200, canvas.width, 250);
-
-    // Viền cầu môn to hơn
+    // Vẽ cầu môn
     ctx.fillStyle = "#ffffff";
-    // Cầu môn trái
-    ctx.fillRect(0, groundY() - 120 - cameraOffsetY, 20, 120);
-    // Cầu môn phải
-    ctx.fillRect(canvas.width - 20, groundY() - 120 - cameraOffsetY, 20, 120);
+    ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
 
     // Vẽ bóng
     ctx.fillStyle = "orange";
     ctx.beginPath();
-    ctx.arc(ball.x, ball.y - cameraOffsetY, ball.radius, 0, Math.PI * 2);
+    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fill();
 
-    // Vẽ cầu thủ
-    drawPlayer(player);
+    // Vẽ người chơi
+    ctx.fillStyle = "#f1c40f";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
 
-    // Vẽ đồng đội
-    drawPlayer(teammate, teammate.color);
-
-    // Vẽ đối thủ
-    opponents.forEach(op => {
-      drawPlayer(op, op.color);
-    });
+    // Vẽ đầu người chơi
+    ctx.beginPath();
+    ctx.arc(player.x + player.width / 2, player.y - 20, 20, 0, Math.PI * 2);
+    ctx.fill();
   }
 
+  // Vòng lặp game
   function loop() {
     update();
     draw();
@@ -361,6 +162,31 @@
 
   loop();
 
+  // Điều khiển
+  document.getElementById("leftBtn").addEventListener("touchstart", () => {
+    player.vx = -5;
+  });
+
+  document.getElementById("rightBtn").addEventListener("touchstart", () => {
+    player.vx = 5;
+  });
+
+  document.getElementById("jumpBtn").addEventListener("touchstart", () => {
+    if (player.onGround) {
+      player.vy = -12;
+      player.onGround = false;
+    }
+  });
+
+  document.getElementById("shootBtn").addEventListener("touchstart", () => {
+    // Sút bóng lên gần cầu môn
+    let dx = ball.x - (player.x + player.width / 2);
+    let dy = ball.y - player.y;
+    let angle = Math.atan2(dy, dx);
+    ball.vx = Math.cos(angle) * 6;
+    ball.vy = Math.sin(angle) * 6 - 5;
+  });
 </script>
+
 </body>
 </html>
