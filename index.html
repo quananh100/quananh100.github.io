@@ -1,192 +1,182 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Head Ball - Gôn gần người chơi</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta charset="UTF-8" />
+  <title>Super Liquid Soccer Clone</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background-color: #6ab04c;
-    }
-    canvas {
-      display: block;
-    }
-    button {
-      position: absolute;
-      font-size: 24px;
-      padding: 12px 24px;
-      z-index: 10;
-      border: none;
-      border-radius: 8px;
-      background-color: #2980b9;
-      color: white;
-    }
-    #leftBtn { bottom: 20px; left: 20px; }
-    #rightBtn { bottom: 20px; left: 120px; }
-    #jumpBtn { bottom: 20px; right: 120px; background-color: #f39c12; }
-    #shootBtn { bottom: 20px; right: 20px; background-color: #e74c3c; }
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #1e5e1e; }
+    canvas { display: block; }
+    #joystick { position: absolute; left: 20px; bottom: 100px; width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,0.2); touch-action: none; }
+    #stick { width: 60px; height: 60px; margin: 20px; background: #fff; border-radius: 50%; position: absolute; }
+    .btn { position: absolute; bottom: 40px; width: 60px; height: 60px; border-radius: 50%; font-weight: bold; font-size: 16px; color: white; border: none; }
+    #shoot { right: 120px; background: red; }
+    #pass { right: 50px; background: orange; }
+    #speed { right: 190px; background: blue; }
+    #powerBar { position: absolute; bottom: 120px; right: 50px; width: 120px; height: 10px; background: #555; display: none; }
+    #powerFill { height: 100%; background: yellow; width: 0%; }
   </style>
 </head>
 <body>
+  <div id="joystick"><div id="stick"></div></div>
+  <button id="shoot" class="btn">Shoot</button>
+  <button id="pass" class="btn">Pass</button>
+  <button id="speed" class="btn">Speed</button>
+  <div id="powerBar"><div id="powerFill"></div></div>
 
-<canvas id="gameCanvas"></canvas>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
 
-<!-- Nút điều khiển -->
-<button id="leftBtn">←</button>
-<button id="rightBtn">→</button>
-<button id="jumpBtn">Jump</button>
-<button id="shootBtn">Shoot</button>
+  <script>
+    let scene = new THREE.Scene();
+    let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    let renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-<script>
-  const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
+    let world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.8, 0) });
 
-  // Kích thước màn hình
-  function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-  resizeCanvas();
-  window.addEventListener("resize", resizeCanvas);
+    let floorMaterial = new CANNON.Material();
+    let floorShape = new CANNON.Plane();
+    let floorBody = new CANNON.Body({ mass: 0, material: floorMaterial });
+    floorBody.addShape(floorShape);
+    floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+    world.addBody(floorBody);
 
-  // Vị trí mặt đất
-  const groundY = canvas.height - 100;
+    let floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 60), new THREE.MeshStandardMaterial({ color: 0x228B22 }));
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
 
-  // Người chơi
-  const player = {
-    x: canvas.width / 2 - 25,
-    y: groundY - 80,
-    width: 50,
-    height: 80,
-    vx: 0,
-    vy: 0,
-    onGround: true
-  };
+    let light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(50, 100, 50);
+    scene.add(light);
 
-  // Bóng
-  const ball = {
-    x: canvas.width / 2,
-    y: groundY - 140,
-    radius: 15,
-    vx: 0,
-    vy: 0
-  };
+    let ambient = new THREE.AmbientLight(0x888888);
+    scene.add(ambient);
 
-  // Cầu môn gần đầu người chơi
-  const goal = {
-    x: canvas.width / 2 - 60,
-    y: groundY - 160,
-    width: 120,
-    height: 10
-  };
+    function createSphere(radius, color, mass, position) {
+      let geo = new THREE.SphereGeometry(radius, 32, 32);
+      let mat = new THREE.MeshStandardMaterial({ color });
+      let mesh = new THREE.Mesh(geo, mat);
+      scene.add(mesh);
 
-  // Vật lý
-  const gravity = 0.6;
-  const friction = 0.9;
+      let shape = new CANNON.Sphere(radius);
+      let body = new CANNON.Body({ mass, shape });
+      body.position.copy(position);
+      world.addBody(body);
 
-  // Cập nhật vị trí
-  function update() {
-    // Cập nhật người chơi
-    player.vy += gravity;
-    player.y += player.vy;
-    player.x += player.vx;
-    player.vx *= friction;
-
-    // Va chạm với mặt đất
-    if (player.y + player.height > groundY) {
-      player.y = groundY - player.height;
-      player.vy = 0;
-      player.onGround = true;
+      return { mesh, body };
     }
 
-    // Cập nhật bóng
-    ball.vy += gravity;
-    ball.x += ball.vx;
-    ball.y += ball.vy;
-
-    // Va chạm bóng với mặt đất
-    if (ball.y + ball.radius > groundY) {
-      ball.y = groundY - ball.radius;
-      ball.vy *= -0.6;
+    function createPlayer(color, x) {
+      let body = new CANNON.Body({ mass: 1, shape: new CANNON.Sphere(1), position: new CANNON.Vec3(x, 1, 0) });
+      world.addBody(body);
+      let mesh = new THREE.Mesh(new THREE.SphereGeometry(1), new THREE.MeshStandardMaterial({ color }));
+      scene.add(mesh);
+      return { mesh, body };
     }
 
-    // Va chạm đơn giản giữa bóng và người chơi
-    let dx = (player.x + player.width / 2) - ball.x;
-    let dy = (player.y + 20) - ball.y;
-    let dist = Math.sqrt(dx * dx + dy * dy);
+    let player = createPlayer(0x0000ff, -10);
+    let bot = createPlayer(0xff0000, 10);
+    let ball = createSphere(0.6, 0xffffff, 0.5, new CANNON.Vec3(0, 1, 0));
 
-    if (dist < 50) {
-      let angle = Math.atan2(dy, dx);
-      ball.vx = -Math.cos(angle) * 5;
-      ball.vy = -Math.abs(Math.sin(angle)) * 8;
+    let goalGeo = new THREE.BoxGeometry(10, 5, 0.5);
+    let netMat = new THREE.MeshStandardMaterial({ color: 0xffffff, wireframe: true });
+    let goal1 = new THREE.Mesh(goalGeo, netMat);
+    let goal2 = new THREE.Mesh(goalGeo, netMat);
+    goal1.position.set(0, 2.5, -29.5);
+    goal2.position.set(0, 2.5, 29.5);
+    scene.add(goal1, goal2);
+
+    let keys = { forward: false, backward: false, left: false, right: false };
+    let move = { x: 0, y: 0 };
+
+    const joystick = document.getElementById('joystick');
+    const stick = document.getElementById('stick');
+
+    joystick.addEventListener('touchmove', e => {
+      let touch = e.touches[0];
+      let rect = joystick.getBoundingClientRect();
+      let dx = touch.clientX - rect.left - 50;
+      let dy = touch.clientY - rect.top - 50;
+      let dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 40) {
+        dx *= 40 / dist;
+        dy *= 40 / dist;
+      }
+      stick.style.transform = `translate(${dx}px, ${dy}px)`;
+      move.x = dx / 40;
+      move.y = dy / 40;
+    });
+
+    joystick.addEventListener('touchend', () => {
+      stick.style.transform = `translate(0px, 0px)`;
+      move.x = move.y = 0;
+    });
+
+    const shootBtn = document.getElementById('shoot');
+    const passBtn = document.getElementById('pass');
+    const speedBtn = document.getElementById('speed');
+    const powerBar = document.getElementById('powerBar');
+    const powerFill = document.getElementById('powerFill');
+    let charging = false;
+    let power = 0;
+
+    shootBtn.ontouchstart = () => {
+      charging = true;
+      power = 0;
+      powerBar.style.display = 'block';
+    };
+
+    shootBtn.ontouchend = () => {
+      charging = false;
+      powerBar.style.display = 'none';
+      let dir = ball.body.position.vsub(player.body.position).unit();
+      ball.body.velocity = dir.scale(power * 20);
+    };
+
+    passBtn.ontouchstart = () => {
+      let dir = ball.body.position.vsub(player.body.position).unit();
+      ball.body.velocity = dir.scale(10);
+    };
+
+    speedBtn.ontouchstart = () => player.body.velocity.scale(2, player.body.velocity);
+
+    camera.position.set(0, 30, 40);
+    camera.lookAt(0, 0, 0);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      world.step(1 / 60);
+
+      // player move
+      let vel = new CANNON.Vec3(move.x * 5, 0, move.y * 5);
+      player.body.velocity.x = vel.x;
+      player.body.velocity.z = vel.z;
+
+      // follow ball
+      if (player.body.position.distanceTo(ball.body.position) < 2) {
+        let toBall = ball.body.position.vsub(player.body.position).unit();
+        ball.body.velocity = toBall.scale(3);
+      }
+
+      // bot AI
+      let botDir = ball.body.position.vsub(bot.body.position);
+      botDir.y = 0;
+      if (botDir.length() > 1) botDir.normalize();
+      bot.body.velocity.x = botDir.x * 4;
+      bot.body.velocity.z = botDir.z * 4;
+
+      // update visuals
+      [player, bot, ball].forEach(obj => obj.mesh.position.copy(obj.body.position));
+      renderer.render(scene, camera);
+
+      if (charging) {
+        power = Math.min(1, power + 0.02);
+        powerFill.style.width = (power * 100) + '%';
+      }
     }
-  }
 
-  // Vẽ sân, cầu môn, bóng và người chơi
-  function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Vẽ mặt đất
-    ctx.fillStyle = "#27ae60";
-    ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
-
-    // Vẽ cầu môn
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
-
-    // Vẽ bóng
-    ctx.fillStyle = "orange";
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Vẽ người chơi
-    ctx.fillStyle = "#f1c40f";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-
-    // Vẽ đầu người chơi
-    ctx.beginPath();
-    ctx.arc(player.x + player.width / 2, player.y - 20, 20, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Vòng lặp game
-  function loop() {
-    update();
-    draw();
-    requestAnimationFrame(loop);
-  }
-
-  loop();
-
-  // Điều khiển
-  document.getElementById("leftBtn").addEventListener("touchstart", () => {
-    player.vx = -5;
-  });
-
-  document.getElementById("rightBtn").addEventListener("touchstart", () => {
-    player.vx = 5;
-  });
-
-  document.getElementById("jumpBtn").addEventListener("touchstart", () => {
-    if (player.onGround) {
-      player.vy = -12;
-      player.onGround = false;
-    }
-  });
-
-  document.getElementById("shootBtn").addEventListener("touchstart", () => {
-    // Sút bóng lên gần cầu môn
-    let dx = ball.x - (player.x + player.width / 2);
-    let dy = ball.y - player.y;
-    let angle = Math.atan2(dy, dx);
-    ball.vx = Math.cos(angle) * 6;
-    ball.vy = Math.sin(angle) * 6 - 5;
-  });
-</script>
-
+    animate();
+  </script>
 </body>
 </html>
